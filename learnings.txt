@@ -1,0 +1,14 @@
+# Learnings — orb-antibiotic-scientist
+
+## 2026-04-17 — Project kickoff
+
+- Repo target: nextbysam/orb-antibiotic-scientist (per fork rule; can transfer to AWLSEN later).
+- Base harness: ported from null-bytes/ai-nutrition-meat-pipeline (SPOQ-Food).
+- Initial bacterial target: MRSA DNA gyrase B, PDB 4URL (ATP-binding pocket).
+- Target #2 planned: M. tuberculosis InhA, PDB 4TZK.
+- Deployment: Orb Cloud via orb.toml + Orb API (docs.orbcloud.dev).
+- Verification architecture: 12-layer per-candidate filter chain + 6 continuous pipeline-health loops.
+- Non-negotiables: novelty Tanimoto < 0.4 vs ChEMBL; positive-control inhibitors must stay in top 5%;
+  negative-control DUD-E decoys must maintain EF1% ≥ 5 and ROC-AUC ≥ 0.75; every candidate has a
+  dedicated adversarial red-team critique.
+- Launch plan: silent 3-week corpus build → launch tweet once 200+ candidates with real rigor scores.
