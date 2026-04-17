@@ -115,6 +115,29 @@ async def run_agent():
         "refuse to produce candidates and tell the operator to restore "
         "src/agent-prompt.md."
     )
+
+    # Forward LLM-routing env vars explicitly to the Claude Code subprocess
+    # spawned by claude-agent-sdk. Orb's org_secrets reach *this* Python
+    # process, but the subprocess does not automatically inherit them in
+    # every deployment (confirmed by a diagnostic snapshot on 2026-04-17).
+    # ClaudeAgentOptions.env is the canonical plumbing for this.
+    _llm_env = {
+        k: v for k, v in (
+            (key, os.environ.get(key))
+            for key in (
+                "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY",
+                "ANTHROPIC_BASE_URL", "API_TIMEOUT_MS",
+                "ANTHROPIC_DEFAULT_OPUS_MODEL",
+                "ANTHROPIC_DEFAULT_SONNET_MODEL",
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+                "PATH", "HOME", "LANG", "LC_ALL",
+            )
+        )
+        if v is not None
+    }
+    log(f"forwarding {len(_llm_env)} env vars to Claude Code subprocess; "
+        f"ANTHROPIC_BASE_URL={_llm_env.get('ANTHROPIC_BASE_URL','<missing>')}")
+
     session_id = load_session()
     if session_id:
         log(f"Loaded persisted session: {session_id}")
@@ -147,6 +170,7 @@ async def run_agent():
                 model="claude-opus-4-7",
                 resume=session_id,
                 cwd=str(PROJECT_DIR),
+                env=_llm_env,
             )
         else:
             prompt = (
@@ -173,6 +197,7 @@ async def run_agent():
                 model="claude-opus-4-7",
                 system_prompt=system_prompt,
                 cwd=str(PROJECT_DIR),
+                env=_llm_env,
             )
 
         try:
