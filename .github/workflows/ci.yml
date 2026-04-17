@@ -1,0 +1,147 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run pytest
+        run: |
+          python -m pytest tests/ -v --tb=short
+
+  reproducibility:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Score identical dossiers twice and compare
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          from pathlib import Path
+
+          sys.path.insert(0, "src")
+          from scoring import score_candidate, update_leaderboard
+          from dataclasses import asdict
+
+          TARGET_YAML = Path("targets/mrsa-gyrb.yaml")
+
+          validate = {
+              "passed": True,
+              "layers": [
+                  {"name": "structure", "passed": True, "gates": [
+                      {"name": "parse", "passed": True},
+                      {"name": "heavy_atom_count", "passed": True},
+                      {"name": "net_formal_charge", "passed": True},
+                      {"name": "single_fragment", "passed": True},
+                  ]},
+                  {"name": "hygiene", "passed": True, "gates": [
+                      {"name": "pains", "passed": True},
+                      {"name": "reos", "passed": True},
+                  ]},
+                  {"name": "druglikeness", "passed": True, "gates": [
+                      {"name": "lipinski", "passed": True},
+                      {"name": "veber", "passed": True},
+                      {"name": "ghose", "passed": True},
+                  ]},
+                  {"name": "synthesizability", "passed": True, "gates": [
+                      {"name": "sa_score", "passed": True, "detail": {"sa_score": 3.0}},
+                  ]},
+              ],
+          }
+          kwargs = dict(
+              target_yaml=TARGET_YAML,
+              candidate_id="cand-repro",
+              smiles="c1ccncc1",
+              docking={"best_energy_kcalmol": -9.5},
+              novelty={"scaffold_hits": [], "max_tanimoto": 0.15},
+              validate=validate,
+              admet={"red_flags": ["one"]},
+              sa_score=2.8,
+              mechanism={"passed": True, "catalytic_residues_hit": [46, 73]},
+              redteam={"substantive_flaw": False},
+          )
+          s1 = score_candidate(**kwargs)
+          s2 = score_candidate(**kwargs)
+
+          # Ignore the timestamp field — it's wall-clock and not part of
+          # the score's reproducibility contract.
+          d1 = asdict(s1); d1.pop("timestamp", None)
+          d2 = asdict(s2); d2.pop("timestamp", None)
+
+          if d1 != d2:
+              print("MISMATCH:")
+              print("  s1:", d1)
+              print("  s2:", d2)
+              sys.exit(1)
+          print(f"reproducibility OK — rigor_score={s1.rigor_score}, sub_scores={s1.sub_scores}")
+          PY
+
+  tool-count:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert verification-chain tool modules present
+        run: |
+          set -e
+          for f in \
+            src/tools/validate_smiles.py \
+            src/tools/dock_vina.py \
+            src/tools/novelty.py \
+            src/tools/admet.py \
+            src/tools/mechanism.py \
+            src/tools/redteam.py \
+            src/scoring.py \
+            loops/positive_control.py \
+            loops/negative_control.py \
+            loops/consensus.py \
+            loops/retrosynthesis.py \
+            src/agent.py \
+            src/agent-prompt.md \
+            src/watchdog.sh \
+            src/control.sh \
+            orb.toml \
+            scripts/orb_deploy.sh \
+            dashboard/index.html \
+            targets/mrsa-gyrb.yaml
+          do
+            if [ ! -f "$f" ]; then
+              echo "MISSING REQUIRED FILE: $f"
+              exit 1
+            fi
+          done
+          echo "✔ all 12 verification-chain modules + deploy surface present"
