@@ -117,6 +117,30 @@ The agent picks up where it left off by inspecting `findings/` on restart.
 
 Runs on [Orb Cloud](https://orbcloud.dev). `orb.toml` configures checkpoint-to-NVMe during LLM waits and docking jobs — the agent hibernates between bursts of activity, so continuous operation costs fractions of a cent per hour.
 
+End-to-end deploy via the Orb Cloud REST API:
+
+```bash
+ORB_API_KEY=orb_... ANTHROPIC_API_KEY=sk-... ./scripts/orb_deploy.sh deploy
+./scripts/orb_deploy.sh status
+./scripts/orb_deploy.sh promote   # manual wake
+./scripts/orb_deploy.sh demote    # manual sleep
+```
+
+Dashboard (live leaderboard + pipeline-health charts):
+
+```bash
+python dashboard/server.py            # http://localhost:8000
+```
+
+## Tests
+
+```bash
+pip install -r requirements.txt
+python -m pytest tests/ -v
+```
+
+129 tests cover every per-layer gate, the composite scoring function, leaderboard upsert semantics, and the pipeline-health loop logic. CI runs the suite on Python 3.10 and 3.11 with an additional reproducibility check that scores an identical dossier twice and asserts byte-identical output.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).

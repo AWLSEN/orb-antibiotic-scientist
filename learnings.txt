@@ -1,5 +1,73 @@
 # Learnings — orb-antibiotic-scientist
 
+## 2026-04-17 — Batches 1-4 shipped
+
+### Shape
+
+20 commits, 4 pushes, full pipeline scaffolded end-to-end:
+  - Harness (agent.py + watchdog.sh + control.sh) ported from SPOQ-Food.
+  - 6 per-candidate verification tools: validate_smiles, dock_vina,
+    novelty, admet, mechanism, redteam.
+  - 4 continuous loops: positive_control, negative_control, consensus,
+    retrosynthesis.
+  - Composite scoring + leaderboard upsert with red-team veto.
+  - System prompt (agent-prompt.md) articulating mission, 12-layer
+    chain, per-candidate output contract.
+  - orb.toml + scripts/orb_deploy.sh (end-to-end api.orbcloud.dev
+    lifecycle via curl).
+  - Single-file dashboard (index.html) + Python server (server.py).
+  - CI: pytest matrix + reproducibility check + file-presence check.
+  - 129 tests passing.
+
+### Decisions
+
+- Each per-layer tool was written to be runnable offline in CI (so
+  tests don't need vina / Meeko / PLIP / ChEMBL API). The integration
+  paths exist but are not exercised by pytest — run `--run` subcommand
+  locally or on Orb to exercise them.
+- Grid box is computed from pocket residue centroids at dock time
+  rather than hard-coded. Different PDB revisions share residue
+  numbering but not Cartesian coordinates; centroid-mode is robust.
+- SMARTS for the scaffold blocklist were hand-tested against known
+  members of each class: β-lactam (penicillin V), fluoroquinolone
+  (cipro, moxi, norflox), aminocoumarin (novobiocin full structure),
+  aminoglycoside (kanamycin). Tetracycline SMARTS deliberately omitted
+  because a reliable pattern for the 4-fused-ring naphthacene skeleton
+  is brittle.
+- Red-team's dry-run rule set is deterministic so CI tests assert on
+  stable output; the live path uses the Anthropic SDK with an
+  adversarial prompt and a separate API call from the main agent.
+- Composite rigor = weighted sum of sub-scores. Red-team substantive
+  flaw is a veto that zeroes the composite entirely — a separate
+  decision surface from the weighted sum, easier to reason about than
+  "red team is one more weight."
+- Candidate IDs are `cand-YYYYMMDD-<sha256[:6]>` so the same SMILES
+  deterministically maps to the same ID, preventing duplicate work
+  across auto-compaction boundaries.
+- Dashboard is single-file HTML + vanilla JS + inline SVG charts — no
+  build step, no framework — because the only data source is
+  findings/*.json and findings/loop-health/*.jsonl, and simplicity
+  beats React for an append-only leaderboard.
+- Orb deploy script is idempotent (finds existing computer by name,
+  reuses). Secrets (ANTHROPIC_API_KEY, GITHUB_TOKEN) go in
+  org_secrets at build/deploy time, never committed.
+- Repo is private on github.com/nextbysam until launch. Flip to public
+  at the moment of the launch tweet.
+
+### Open items before launch
+
+- Need to wire a real DiffDock or GNINA secondary engine; currently
+  consensus.py uses a Vina seed-2 stub on the integration path.
+- Need to prepare a curated DUD-E decoy set for MRSA GyrB at
+  data/dud-e/mrsa-gyrb-decoys.smi (~50 decoys minimum).
+- AiZynthFinder path in loops/retrosynthesis.py is unwired — production
+  deploys should provide a template library + expansion model and
+  enable --aizynth.
+- Wet-lab outreach list (academic GyrB labs) needs to be compiled
+  before launch thread so Top-5 candidates have an obvious next step.
+- Launch tweet thread draft lives in the PDF strategy note; rewrite
+  against the actual repo + corpus before the tweet.
+
 ## 2026-04-17 — Project kickoff
 
 - Repo target: nextbysam/orb-antibiotic-scientist (per fork rule; can transfer to AWLSEN later).
