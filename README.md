@@ -120,11 +120,25 @@ Runs on [Orb Cloud](https://orbcloud.dev). `orb.toml` configures checkpoint-to-N
 End-to-end deploy via the Orb Cloud REST API:
 
 ```bash
-ORB_API_KEY=orb_... ANTHROPIC_API_KEY=sk-... ./scripts/orb_deploy.sh deploy
-./scripts/orb_deploy.sh status
+# Default provider: Z.AI GLM Coding Plan (~$10/mo flat, routes through
+# https://api.z.ai/api/anthropic using the Anthropic-compatible surface
+# that Claude Code / Claude Agent SDK speak natively).
+ORB_API_KEY=orb_... ANTHROPIC_AUTH_TOKEN=<zai_key> ./scripts/orb_deploy.sh deploy
+
+# Switch to native Anthropic API:
+ORB_LLM_PROVIDER=anthropic ORB_API_KEY=orb_... ANTHROPIC_API_KEY=sk-... \
+  ./scripts/orb_deploy.sh deploy
+
+# Lifecycle:
+./scripts/orb_deploy.sh status    # computer + agents JSON
 ./scripts/orb_deploy.sh promote   # manual wake
 ./scripts/orb_deploy.sh demote    # manual sleep
+./scripts/orb_deploy.sh usage     # cost so far
 ```
+
+The deploy script caches computer/agent IDs under `.orb-state/` so
+follow-up commands don't re-register. The Z.AI key can also be dropped
+into `.orb-state/zai-key` for local reuse (gitignored).
 
 Dashboard (live leaderboard + pipeline-health charts):
 

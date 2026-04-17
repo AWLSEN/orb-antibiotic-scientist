@@ -24,11 +24,15 @@ steps = [
 ]
 
 [llm]
-# Claude is the only LLM backend used by the agent (system prompt +
-# red-team critique). The API key arrives as ANTHROPIC_API_KEY at
-# deploy time via org_secrets — NOT hard-coded here.
-base_url = "https://api.anthropic.com"
-model    = "claude-opus-4-7"
+# The agent talks to the Anthropic API surface. For the default
+# configuration that routes through the Z.AI GLM Coding Plan (cheaper
+# ~$10/mo flat vs pay-as-you-go on Anthropic) we set base_url to Z.AI's
+# Anthropic-compatible endpoint; the Agent SDK / Claude Code under the
+# hood picks up ANTHROPIC_BASE_URL + ANTHROPIC_AUTH_TOKEN below.
+# Override via orb_deploy.sh --provider anthropic to switch back to
+# the native Anthropic API.
+base_url = "https://api.z.ai/api/anthropic"
+model    = "claude-opus-4-7"   # Z.AI remaps to GLM-4.7 via ANTHROPIC_DEFAULT_OPUS_MODEL
 
 [ports]
 # Future dashboard + webhook endpoint. The agent itself doesn't serve
@@ -46,5 +50,14 @@ disk    = "10GB"
 [env]
 # Non-secret environment. Secrets are passed via org_secrets at deploy
 # time (see scripts/orb_deploy.sh).
-PYTHONUNBUFFERED = "1"
-ORB_ANTIBIOTIC_TARGET = "targets/mrsa-gyrb.yaml"
+PYTHONUNBUFFERED           = "1"
+ORB_ANTIBIOTIC_TARGET      = "targets/mrsa-gyrb.yaml"
+
+# Z.AI GLM Coding Plan routing. The Agent SDK + Claude Code CLI read
+# these exactly like native Anthropic env vars. ANTHROPIC_AUTH_TOKEN
+# is a secret and is passed via org_secrets, not listed here.
+ANTHROPIC_BASE_URL              = "https://api.z.ai/api/anthropic"
+API_TIMEOUT_MS                  = "3000000"
+ANTHROPIC_DEFAULT_OPUS_MODEL    = "GLM-4.7"
+ANTHROPIC_DEFAULT_SONNET_MODEL  = "GLM-4.7"
+ANTHROPIC_DEFAULT_HAIKU_MODEL   = "GLM-4.5-Air"

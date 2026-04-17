@@ -9,9 +9,13 @@
 # Required env vars:
 #   ORB_API_KEY          — Bearer token from https://app.orbcloud.dev/
 #                          OR leave empty to auto-register a new key.
-#   ANTHROPIC_API_KEY    — forwarded into the agent via org_secrets.
+#   ANTHROPIC_AUTH_TOKEN — Z.AI GLM Coding Plan key (default provider)
+#                          OR ANTHROPIC_API_KEY if --provider anthropic.
+#                          Forwarded into the agent via org_secrets.
 #
 # Optional env vars:
+#   ORB_LLM_PROVIDER     — "zai" (default) or "anthropic". Controls which
+#                          secret name is forwarded to the agent.
 #   ORB_COMPUTER_NAME    — default "orb-antibiotic-scientist"
 #   ORB_RUNTIME_MB       — default 4096 (match orb.toml [resources])
 #   ORB_DISK_MB          — default 10240
@@ -132,11 +136,31 @@ trigger_build() {
 
 start_agent() {
     local cid; cid=$(cat "$COMPUTER_FILE")
-    : "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY required to start the agent}"
-    log "starting agent on $cid"
+    local provider="${ORB_LLM_PROVIDER:-zai}"
     local payload
-    payload=$(jq -n --arg k "$ANTHROPIC_API_KEY" \
-        '{task:"start",org_secrets:{ANTHROPIC_API_KEY:$k}}')
+
+    case "$provider" in
+        zai)
+            local key="${ANTHROPIC_AUTH_TOKEN:-}"
+            if [[ -z "$key" && -f "$STATE_DIR/zai-key" ]]; then
+                key=$(cat "$STATE_DIR/zai-key")
+            fi
+            [[ -n "$key" ]] || die "ANTHROPIC_AUTH_TOKEN (Z.AI key) required for provider=zai"
+            log "starting agent on $cid (provider=zai → routing to Z.AI GLM Coding Plan)"
+            payload=$(jq -n --arg k "$key" \
+                '{task:"start",org_secrets:{ANTHROPIC_AUTH_TOKEN:$k}}')
+            ;;
+        anthropic)
+            : "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY required for provider=anthropic}"
+            log "starting agent on $cid (provider=anthropic → native Anthropic API)"
+            payload=$(jq -n --arg k "$ANTHROPIC_API_KEY" \
+                '{task:"start",org_secrets:{ANTHROPIC_API_KEY:$k}}')
+            ;;
+        *)
+            die "unknown ORB_LLM_PROVIDER=$provider (expected 'zai' or 'anthropic')"
+            ;;
+    esac
+
     local resp
     resp=$(curl -fsS "${auth_hdr[@]}" -X POST "$BASE_URL/v1/computers/$cid/agents" \
         -H 'Content-Type: application/json' \
