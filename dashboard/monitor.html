@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>orb-antibiotic-scientist · monitor</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap');
+
+:root {
+  --bg:        hsl(0, 0%, 6%);
+  --surface:   hsl(0, 0%, 9%);
+  --surface-2: hsl(0, 0%, 12%);
+  --line:      hsl(0, 0%, 18%);
+  --line-2:    hsl(0, 0%, 28%);
+  --fg:        hsl(0, 0%, 92%);
+  --fg-dim:    hsl(0, 0%, 62%);
+  --fg-faint:  hsl(0, 0%, 38%);
+  --ok:        hsl(152, 40%, 68%);
+  --warn:      hsl(38, 75%, 65%);
+  --err:       hsl(0, 55%, 68%);
+  --radius:    2px;
+  --font:      'Inter', ui-sans-serif, system-ui, sans-serif;
+  --mono:      'Space Mono', ui-monospace, 'Courier New', monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font); font-weight: 400; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  min-height: 100vh;
+  padding: 2rem 2.5rem 3rem;
+}
+
+/* ── ambient grid background ──────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 80px 80px;
+  opacity: 0.12;
+  pointer-events: none;
+  z-index: 0;
+}
+
+main { position: relative; z-index: 1; max-width: 1480px; margin: 0 auto; }
+
+/* ── HEADER ──────────────────────────────────────────────── */
+header {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  padding-bottom: 1.2rem; margin-bottom: 1.6rem;
+  border-bottom: 1px solid var(--line);
+}
+header .title { display: flex; flex-direction: column; gap: 0.25rem; }
+header .title h1 {
+  margin: 0; font-weight: 300; font-size: 1.6rem; letter-spacing: -0.01em;
+  font-family: var(--mono);
+}
+header .title .sub {
+  color: var(--fg-dim); font-size: 0.82rem; letter-spacing: 0.04em;
+  text-transform: uppercase; font-weight: 400;
+}
+header .live {
+  display: flex; gap: 0.9rem; align-items: center;
+  font-family: var(--mono); font-size: 0.8rem; color: var(--fg-dim);
+}
+.live .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--ok);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.35; transform: scale(0.7); }
+}
+.live.warn .dot { background: var(--warn); }
+.live.err  .dot { background: var(--err); }
+
+/* ── HERO BAND ───────────────────────────────────────────── */
+.hero {
+  border: 1px solid var(--line);
+  padding: 1.8rem 2rem;
+  display: grid;
+  grid-template-columns: 1.2fr repeat(3, 1fr);
+  gap: 2.4rem;
+  margin-bottom: 1.6rem;
+  position: relative;
+  overflow: hidden;
+}
+.hero::after {
+  content: '';
+  position: absolute; left: 0; bottom: 0; height: 1px; width: 100%;
+  background: linear-gradient(90deg, transparent, var(--ok) 50%, transparent);
+  opacity: 0.2;
+  animation: scan 6s linear infinite;
+}
+@keyframes scan {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.hero .col .label {
+  font-size: 0.7rem; letter-spacing: 0.15em; color: var(--fg-faint);
+  text-transform: uppercase; margin-bottom: 0.5rem;
+}
+.hero .col .value {
+  font-family: var(--mono); font-size: 2.3rem; line-height: 1.1;
+  font-weight: 400; color: var(--fg);
+}
+.hero .col .unit {
+  font-size: 0.9rem; color: var(--fg-dim); margin-left: 0.3rem;
+}
+.hero .col .detail {
+  color: var(--fg-dim); font-size: 0.78rem; margin-top: 0.6rem;
+  font-family: var(--mono);
+}
+
+.state-indicator {
+  display: flex; align-items: center; gap: 1rem;
+}
+.state-indicator .halo {
+  width: 56px; height: 56px; border-radius: 50%;
+  border: 1px solid var(--line-2);
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+.state-indicator .halo::before {
+  content: ''; position: absolute; inset: -6px;
+  border: 1px solid var(--ok); border-radius: 50%;
+  opacity: 0.4; animation: halo 2.4s ease-in-out infinite;
+}
+@keyframes halo {
+  0%, 100% { transform: scale(1);    opacity: 0.4; }
+  50%      { transform: scale(1.15); opacity: 0.05; }
+}
+.state-indicator.err .halo::before { border-color: var(--err); }
+.state-indicator.warn .halo::before { border-color: var(--warn); }
+.state-indicator .core {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--ok);
+}
+.state-indicator.err .core { background: var(--err); }
+.state-indicator.warn .core { background: var(--warn); }
+.state-indicator .txt .state-name {
+  font-family: var(--mono); font-size: 1.6rem; letter-spacing: -0.01em;
+}
+.state-indicator .txt .state-sub {
+  color: var(--fg-dim); font-size: 0.78rem;
+  font-family: var(--mono);
+}
+
+/* ── CARD/SECTION BASE ───────────────────────────────────── */
+.card {
+  border: 1px solid var(--line);
+  padding: 1.3rem 1.4rem 1.4rem;
+  background: transparent;
+  margin-bottom: 1.2rem;
+  position: relative;
+}
+.card h2 {
+  margin: 0 0 1rem 0;
+  font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--fg-faint); font-weight: 500;
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+.card h2 .meta {
+  font-family: var(--mono); font-size: 0.7rem;
+  color: var(--fg-dim); letter-spacing: 0.05em; text-transform: none;
+}
+.alert-banner {
+  border: 1px solid var(--err); color: var(--err);
+  padding: 0.4rem 0.7rem; margin-bottom: 0.7rem;
+  font-family: var(--mono); font-size: 0.78rem;
+}
+
+.grid { display: grid; gap: 1.2rem; }
+.g-2 { grid-template-columns: 1fr 1fr; }
+.g-3 { grid-template-columns: 1fr 1fr 1fr; }
+.g-pipe { grid-template-columns: 2fr 1fr; }
+
+/* ── COUNTERS ─────────────────────────────────────────────── */
+.counter-row {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 0.8rem; margin-top: 0.7rem;
+}
+.counter {
+  border: 1px solid var(--line);
+  padding: 0.7rem 0.9rem 0.8rem;
+}
+.counter .n {
+  font-family: var(--mono); font-size: 1.55rem; font-weight: 400;
+  line-height: 1; transition: all 300ms;
+}
+.counter .lbl {
+  font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--fg-dim); margin-top: 0.35rem;
+}
+.counter.pulse .n { color: var(--ok); }
+
+.progress-block { margin-top: 1rem; }
+.progress-block .top {
+  display: flex; justify-content: space-between; font-size: 0.78rem;
+  color: var(--fg-dim); font-family: var(--mono); margin-bottom: 0.4rem;
+}
+.progress-bar {
+  height: 2px; width: 100%; background: var(--line);
+  position: relative; overflow: hidden;
+}
+.progress-bar .fill {
+  height: 100%; background: var(--fg); transition: width 500ms;
+}
+.progress-bar .fill.ok { background: var(--ok); }
+.progress-bar::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+  animation: sweep 3s linear infinite;
+}
+@keyframes sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+/* ── VERIFICATION CHAIN ──────────────────────────────────── */
+.chain-wrap {
+  overflow: hidden; position: relative;
+  padding: 0.5rem 0 0.3rem;
+}
+.chain {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 0; align-items: stretch;
+}
+.gate {
+  border: 1px solid var(--line);
+  padding: 0.65rem 0.6rem; position: relative; cursor: default;
+  transition: all 200ms;
+  min-height: 86px;
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+.gate:not(:first-child) { border-left: none; }
+.gate:hover { background: var(--surface); border-color: var(--line-2); }
+.gate .n {
+  font-family: var(--mono); font-size: 0.68rem; color: var(--fg-faint);
+  letter-spacing: 0.05em;
+}
+.gate .g-name {
+  font-size: 0.78rem; color: var(--fg); font-weight: 500;
+  margin-top: 0.25rem; line-height: 1.25;
+}
+.gate .g-tool {
+  font-family: var(--mono); font-size: 0.65rem;
+  color: var(--fg-dim); margin-top: 0.3rem;
+  letter-spacing: 0.02em;
+}
+.gate .bar {
+  height: 2px; margin-top: 0.4rem; background: var(--line);
+  position: relative;
+}
+.gate .bar .fill {
+  position: absolute; left: 0; top: 0; bottom: 0; background: var(--fg);
+}
+.gate.active {
+  background: var(--surface-2);
+  border-color: var(--ok);
+}
+.gate.active .bar .fill { background: var(--ok); }
+
+/* molecule flowing through the chain */
+.molecule {
+  position: absolute; top: 50%; margin-top: -6px;
+  width: 12px; height: 12px;
+  border: 1px solid var(--ok);
+  background: var(--bg);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--ok);
+  animation: flow 14s linear infinite;
+  pointer-events: none;
+}
+.molecule::after {
+  content: ''; position: absolute; inset: 2px;
+  background: var(--ok);
+  border-radius: 50%;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes flow {
+  0%   { left: -20px; opacity: 0; }
+  5%   { opacity: 1; }
+  95%  { opacity: 1; }
+  100% { left: calc(100% + 20px); opacity: 0; }
+}
+
+.hover-caption {
+  position: absolute; bottom: -1px; left: -1px; right: -1px;
+  background: var(--bg);
+  border: 1px solid var(--line-2);
+  padding: 0.65rem 0.8rem;
+  font-size: 0.78rem; color: var(--fg-dim);
+  opacity: 0; transform: translateY(6px);
+  transition: all 200ms; pointer-events: none;
+  z-index: 5;
+  min-height: 54px;
+}
+.gate:hover + .hover-caption,
+.gate:hover ~ .hover-caption.show { opacity: 1; transform: translateY(0); }
+
+/* ── RUN TIMELINE ────────────────────────────────────────── */
+.timeline-wrap { display: flex; gap: 1.2rem; align-items: center; }
+.timeline {
+  flex: 1; display: flex; gap: 2px; align-items: center;
+  padding: 0.3rem 0; min-height: 28px;
+}
+.run-dot {
+  width: 8px; height: 18px; background: var(--line-2);
+  cursor: pointer; transition: all 150ms;
+  flex-shrink: 0;
+}
+.run-dot:hover { transform: scaleY(1.3); }
+.run-dot.ok   { background: var(--ok); }
+.run-dot.err  { background: var(--err); }
+.run-dot.pending {
+  background: var(--fg-faint);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+.timeline-stats {
+  font-family: var(--mono); color: var(--fg-dim); font-size: 0.82rem;
+  min-width: 130px; text-align: right;
+}
+.timeline-stats .pct {
+  font-size: 1.5rem; color: var(--fg); display: block; line-height: 1;
+}
+.run-tooltip {
+  position: fixed; background: var(--bg);
+  border: 1px solid var(--line-2); padding: 0.5rem 0.7rem;
+  font-family: var(--mono); font-size: 0.75rem;
+  color: var(--fg); pointer-events: none; z-index: 100;
+  white-space: nowrap; opacity: 0; transition: opacity 150ms;
+  max-width: 360px; white-space: normal;
+}
+.run-tooltip.show { opacity: 1; }
+
+/* ── ENV PLUMBING ────────────────────────────────────────── */
+.env-list { display: grid; gap: 0.3rem; }
+.env-row {
+  display: grid; grid-template-columns: 18px 1fr auto;
+  gap: 0.6rem; align-items: center;
+  font-family: var(--mono); font-size: 0.8rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.env-row:last-child { border-bottom: none; }
+.env-row .check {
+  width: 14px; height: 14px; border: 1px solid var(--ok);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--ok); font-size: 0.7rem;
+}
+.env-row.missing .check { border-color: var(--err); color: var(--err); }
+.env-row.missing .name { color: var(--err); }
+.env-row .name { color: var(--fg); }
+.env-row .val {
+  color: var(--fg-dim); font-size: 0.72rem;
+  max-width: 220px; text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ── CHARTS ──────────────────────────────────────────────── */
+.chart {
+  height: 130px; margin-top: 0.2rem;
+  position: relative;
+}
+.chart svg { width: 100%; height: 100%; overflow: visible; }
+.chart .axis { stroke: var(--line); stroke-width: 1; }
+.chart .line { fill: none; stroke: var(--fg); stroke-width: 1.2; }
+.chart .line.second { stroke: var(--ok); }
+.chart .baseline { stroke: var(--warn); stroke-dasharray: 3 3; stroke-width: 1; }
+.chart .dot { fill: var(--fg); r: 2; }
+.chart .label {
+  fill: var(--fg-faint); font-family: var(--mono); font-size: 9px;
+}
+.empty-chart {
+  display: flex; align-items: center; justify-content: center;
+  height: 100%; color: var(--fg-faint);
+  font-size: 0.75rem; font-family: var(--mono);
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+
+/* ── LEADERBOARD ─────────────────────────────────────────── */
+.lb-row {
+  display: grid; grid-template-columns: 20px 1fr 90px;
+  gap: 0.8rem; align-items: center;
+  padding: 0.55rem 0; border-bottom: 1px solid var(--line);
+  font-size: 0.82rem;
+}
+.lb-row:last-child { border-bottom: none; }
+.lb-row .rank { font-family: var(--mono); color: var(--fg-faint); }
+.lb-row .cid  { font-family: var(--mono); color: var(--fg); }
+.lb-row .score-wrap {
+  display: flex; align-items: center; gap: 0.4rem;
+}
+.lb-row .score-bar {
+  flex: 1; height: 2px; background: var(--line);
+  position: relative;
+}
+.lb-row .score-bar .fill {
+  position: absolute; inset: 0 auto 0 0;
+  background: var(--fg);
+}
+.lb-row .score-num {
+  font-family: var(--mono); color: var(--fg-dim); font-size: 0.78rem;
+}
+.empty-state {
+  padding: 2rem 0.5rem; text-align: center;
+  color: var(--fg-dim); font-size: 0.82rem;
+  border: 1px dashed var(--line); font-family: var(--mono);
+}
+.empty-state::before {
+  content: ''; display: block; width: 20px; height: 20px;
+  margin: 0 auto 0.8rem; border: 1px solid var(--fg-dim);
+  border-radius: 50%;
+  border-top-color: var(--fg);
+  animation: spin 2s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── LOG TAIL ────────────────────────────────────────────── */
+.log {
+  background: hsl(0, 0%, 4%);
+  border: 1px solid var(--line);
+  padding: 0.9rem 1rem;
+  font-family: var(--mono); font-size: 0.76rem;
+  max-height: 320px; overflow-y: auto;
+  white-space: pre-wrap; word-break: break-all;
+  line-height: 1.55; color: var(--fg-dim);
+}
+.log .err  { color: var(--err); }
+.log .info { color: var(--fg); }
+.log .tool { color: var(--ok); }
+.log::-webkit-scrollbar { width: 4px; }
+.log::-webkit-scrollbar-track { background: transparent; }
+.log::-webkit-scrollbar-thumb { background: var(--line-2); }
+
+/* ── FOOTER ──────────────────────────────────────────────── */
+footer {
+  margin-top: 2rem; padding-top: 1.2rem;
+  border-top: 1px solid var(--line);
+  display: flex; justify-content: space-between;
+  color: var(--fg-dim); font-size: 0.78rem;
+  font-family: var(--mono);
+}
+footer a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--fg-dim); }
+footer a:hover { border-bottom-color: var(--fg); }
+
+/* ── SKELETON ────────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface) 0%, var(--surface-2) 50%, var(--surface) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s linear infinite;
+  height: 1em; border-radius: 1px;
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* ── RESPONSIVE ──────────────────────────────────────────── */
+@media (max-width: 980px) {
+  body { padding: 1rem; }
+  .hero { grid-template-columns: 1fr 1fr; }
+  .counter-row { grid-template-columns: repeat(4, 1fr); }
+  .chain { grid-template-columns: repeat(4, 1fr); }
+  .gate { border-left: 1px solid var(--line) !important; border-top: none; }
+  .gate:nth-child(4n+1) { border-left: 1px solid var(--line) !important; }
+  .g-2, .g-3, .g-pipe { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<main>
+
+<!-- HEADER -->
+<header>
+  <div class="title">
+    <h1>orb-antibiotic-scientist</h1>
+    <div class="sub">MRSA GyrB · Z.AI GLM-4.7 · live</div>
+  </div>
+  <div class="live" id="live-indicator">
+    <span class="dot"></span>
+    <span id="live-ts">connecting…</span>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="col">
+    <div class="label">agent state</div>
+    <div class="state-indicator" id="state-indicator">
+      <div class="halo"><div class="core"></div></div>
+      <div class="txt">
+        <div class="state-name" id="state-name">—</div>
+        <div class="state-sub" id="state-sub">loading…</div>
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="label">provider</div>
+    <div class="value" id="provider-name">Z.AI</div>
+    <div class="detail" id="provider-detail">GLM-4.7 · status unknown</div>
+  </div>
+  <div class="col">
+    <div class="label">current run</div>
+    <div class="value"><span id="run-num">—</span><span class="unit" id="run-outcome"></span></div>
+    <div class="detail" id="run-detail">no runs yet</div>
+  </div>
+  <div class="col">
+    <div class="label">cumulative cost</div>
+    <div class="value">$<span id="total-cost">0.00</span></div>
+    <div class="detail" id="cost-detail">over <span id="run-count">0</span> runs</div>
+  </div>
+</section>
+
+<!-- 12-LAYER CHAIN -->
+<section class="card">
+  <h2>
+    <span>12-layer verification chain</span>
+    <span class="meta" id="chain-meta">mrsa-gyrb · centroid docking</span>
+  </h2>
+  <div class="chain-wrap">
+    <div class="chain" id="chain"></div>
+    <div class="molecule" id="molecule"></div>
+  </div>
+  <div class="hover-caption" id="gate-caption">hover a gate for details</div>
+</section>
+
+<!-- RUN TIMELINE -->
+<section class="card">
+  <h2>
+    <span>run timeline</span>
+    <span class="meta">last 50 · green pass · red fail · grey pending</span>
+  </h2>
+  <div class="timeline-wrap">
+    <div class="timeline" id="timeline"></div>
+    <div class="timeline-stats">
+      <span class="pct" id="pass-pct">—</span>
+      <span>pass rate</span>
+    </div>
+  </div>
+</section>
+
+<!-- ROW: counters + env -->
+<div class="grid g-pipe">
+  <section class="card">
+    <h2>
+      <span>candidate production</span>
+      <span class="meta" id="cand-meta">—</span>
+    </h2>
+    <div class="counter-row" id="counter-row"></div>
+    <div class="progress-block">
+      <div class="top">
+        <span>leaderboard progress</span>
+        <span id="progress-label">0 / 1 (first entry)</span>
+      </div>
+      <div class="progress-bar"><div class="fill ok" id="progress-fill" style="width:0%"></div></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>
+      <span>env plumbing</span>
+      <span class="meta" id="env-meta">agent process</span>
+    </h2>
+    <div class="env-list" id="env-list"></div>
+  </section>
+</div>
+
+<!-- ROW: charts + leaderboard -->
+<div class="grid g-3">
+  <section class="card" id="positive-card">
+    <h2>
+      <span>positive control</span>
+      <span class="meta">novobiocin ΔG · kcal/mol</span>
+    </h2>
+    <div class="chart" id="positive-chart"></div>
+  </section>
+
+  <section class="card" id="negative-card">
+    <h2>
+      <span>negative control</span>
+      <span class="meta">EF1% · ROC-AUC</span>
+    </h2>
+    <div class="chart" id="negative-chart"></div>
+  </section>
+
+  <section class="card">
+    <h2>
+      <span>leaderboard</span>
+      <span class="meta" id="lb-meta">top 5 · rigor ≥ 0.83</span>
+    </h2>
+    <div id="leaderboard-body">
+      <div class="empty-state">agent warming up.<br>first candidate in progress…</div>
+    </div>
+  </section>
+</div>
+
+<!-- LOG TAIL -->
+<section class="card">
+  <h2>
+    <span>agent-sdk log</span>
+    <span class="meta">last 30 meaningful lines · tailing</span>
+  </h2>
+  <div class="log" id="log-tail">connecting to /api/state …</div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <span>
+    <a href="https://github.com/nextbysam/orb-antibiotic-scientist" target="_blank">github</a>
+    ·
+    <a href="https://github.com/nextbysam/orb-antibiotic-scientist/blob/main/DISCLAIMER.md" target="_blank">disclaimer</a>
+  </span>
+  <span>auto-refresh every 5 s · computer d2ae6887</span>
+</footer>
+
+</main>
+
+<div class="run-tooltip" id="run-tooltip"></div>
+
+<script>
+/* ────────────────────────────────────────────────────────────
+   gate schema — used to render the 12-layer chain
+   ──────────────────────────────────────────────────────────── */
+const GATES = [
+  { n: 1,  name: "SMILES parse",       tool: "RDKit",      desc: "Parses and sanitizes the candidate structure. Rejects invalid atoms, bad valence, fragmented or extreme-charge molecules." },
+  { n: 2,  name: "Hygiene",            tool: "PAINS + REOS", desc: "Rejects pan-assay interference compounds and reactive groups (nitro-aromatic, aldehyde, peroxide, epoxide, disulfide, polyhalide)." },
+  { n: 3,  name: "Drug-likeness",      tool: "Lipinski+Veber+Ghose", desc: "All three rule sets must pass: MW, LogP, H-bond donors/acceptors, TPSA, rotatable bonds, molar refractivity." },
+  { n: 4,  name: "Synthesizability",   tool: "Ertl SA Score",  desc: "Rejects molecules with SA score > 6 — too hard to synthesize for wet-lab follow-up." },
+  { n: 5,  name: "Primary dock",       tool: "AutoDock Vina",  desc: "Dock against MRSA GyrB pocket (PDB 4URL). Best ΔG must be ≤ −8.0 kcal/mol. Grid box computed from pocket residue centroid." },
+  { n: 6,  name: "Consensus dock",     tool: "DiffDock / seed2", desc: "Secondary engine confirms the primary pose (RMSD ≤ 2 Å). Rejects candidates that Vina alone over-ranks." },
+  { n: 7,  name: "Mechanism",          tool: "PLIP",          desc: "Counts pocket-residue contacts in the top pose. ≥ 2 required, ≥ 1 of {Asn46, Glu50, Asp73, Arg76}. Resistance-only binders demoted." },
+  { n: 8,  name: "ADMET",              tool: "QED+Brenk/NIH/ZINC", desc: "QED, BBB/PK proxies, Brenk + NIH + ZINC structural alerts, plus toxicophore SMARTS (hERG proxy, CYP MBI, quaternary N)." },
+  { n: 9,  name: "Novelty",            tool: "ChEMBL Tanimoto", desc: "Morgan fingerprint (r=2, 2048 bits) vs ChEMBL. Max Tanimoto < 0.40 required. Scaffold blocklist blocks known antibiotic cores." },
+  { n:10,  name: "Resistance-proof",   tool: "YAML hotspots", desc: "Candidates binding only residues listed as single-site resistance hotspots (Gly85, Arg136, Ser128) are demoted — resistance would evolve fast." },
+  { n:11,  name: "Retrosynthesis",     tool: "BRICS / AiZynth", desc: "Heuristic or AiZynthFinder feasibility check. A candidate that cannot be made is not a candidate." },
+  { n:12,  name: "Red team",           tool: "Claude · adversarial", desc: "Separate Claude call with an adversarial prompt. Must find 3 flaws; any substantive flaw vetoes the composite rigor score." },
+];
+
+const FINDING_KEYS = [
+  { key: "candidates",     lbl: "candidates" },
+  { key: "docking",        lbl: "docking" },
+  { key: "admet",          lbl: "admet" },
+  { key: "novelty",        lbl: "novelty" },
+  { key: "mechanism",      lbl: "mechanism" },
+  { key: "red_team",       lbl: "red team" },
+  { key: "retrosynthesis", lbl: "retro" },
+];
+
+const REQ_ENV = [
+  { k: "ANTHROPIC_BASE_URL",             lbl: "base URL" },
+  { k: "ANTHROPIC_AUTH_TOKEN",           lbl: "auth token" },
+  { k: "API_TIMEOUT_MS",                 lbl: "api timeout" },
+  { k: "ANTHROPIC_DEFAULT_OPUS_MODEL",   lbl: "opus model" },
+  { k: "ANTHROPIC_DEFAULT_SONNET_MODEL", lbl: "sonnet model" },
+  { k: "ANTHROPIC_DEFAULT_HAIKU_MODEL",  lbl: "haiku model" },
+];
+
+/* ────────────────────────────────────────────────────────────
+   render gates — static but live animated
+   ──────────────────────────────────────────────────────────── */
+const chainEl = document.getElementById("chain");
+const caption = document.getElementById("gate-caption");
+GATES.forEach((g, i) => {
+  const div = document.createElement("div");
+  div.className = "gate";
+  div.dataset.idx = i;
+  div.innerHTML = `
+    <div>
+      <div class="n">L${g.n.toString().padStart(2,"0")}</div>
+      <div class="g-name">${g.name}</div>
+      <div class="g-tool">${g.tool}</div>
+    </div>
+    <div class="bar"><div class="fill" style="width:0%"></div></div>
+  `;
+  div.addEventListener("mouseenter", () => {
+    caption.textContent = `L${g.n.toString().padStart(2,"0")} · ${g.name} — ${g.desc}`;
+    caption.classList.add("show");
+  });
+  div.addEventListener("mouseleave", () => {
+    caption.classList.remove("show");
+  });
+  chainEl.appendChild(div);
+});
+
+/* render finding counters */
+const counterRow = document.getElementById("counter-row");
+FINDING_KEYS.forEach(({ key, lbl }) => {
+  const d = document.createElement("div");
+  d.className = "counter";
+  d.dataset.key = key;
+  d.innerHTML = `<div class="n" data-n="0">0</div><div class="lbl">${lbl}</div>`;
+  counterRow.appendChild(d);
+});
+/* weekly is a special little one */
+{
+  const d = document.createElement("div");
+  d.className = "counter";
+  d.dataset.key = "weekly_reports";
+  d.innerHTML = `<div class="n" data-n="0">0</div><div class="lbl">reports</div>`;
+  counterRow.appendChild(d);
+}
+
+/* render env placeholders */
+const envList = document.getElementById("env-list");
+REQ_ENV.forEach(({ k, lbl }) => {
+  const row = document.createElement("div");
+  row.className = "env-row missing";
+  row.dataset.k = k;
+  row.innerHTML = `
+    <div class="check">×</div>
+    <div class="name">${lbl}</div>
+    <div class="val">—</div>
+  `;
+  envList.appendChild(row);
+});
+
+/* ────────────────────────────────────────────────────────────
+   counter animator — tick numbers smoothly
+   ──────────────────────────────────────────────────────────── */
+function animateNumber(el, from, to, dur = 600) {
+  const t0 = performance.now();
+  function step(now) {
+    const p = Math.min(1, (now - t0) / dur);
+    const e = 1 - Math.pow(1 - p, 3);
+    el.textContent = Math.round(from + (to - from) * e).toString();
+    if (p < 1) requestAnimationFrame(step);
+    else el.dataset.n = to;
+  }
+  requestAnimationFrame(step);
+}
+
+/* ────────────────────────────────────────────────────────────
+   chart renderer — SVG only
+   ──────────────────────────────────────────────────────────── */
+function renderLine(containerId, series, opts = {}) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = "";
+  if (!series || !series.length || series.every(s => !s.points || !s.points.length)) {
+    el.innerHTML = `<div class="empty-chart">awaiting data</div>`;
+    return;
+  }
+  const W = el.clientWidth || 360, H = el.clientHeight || 130;
+  const P = 18;
+  const allVals = series.flatMap(s => s.points.map(p => p.v)).filter(v => v != null);
+  if (!allVals.length) { el.innerHTML = `<div class="empty-chart">no numeric data</div>`; return; }
+  const vmin = opts.vmin ?? Math.min(...allVals);
+  const vmax = opts.vmax ?? Math.max(...allVals);
+  const span = Math.max(0.001, vmax - vmin);
+  const N = Math.max(...series.map(s => s.points.length));
+
+  const sx = (i, n) => P + ((W - 2 * P) * i) / Math.max(1, n - 1);
+  const sy = (v) => H - P - ((v - vmin) / span) * (H - 2 * P);
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`;
+  svg += `<line class="axis" x1="${P}" y1="${H - P}" x2="${W - P}" y2="${H - P}" />`;
+  svg += `<line class="axis" x1="${P}" y1="${P}" x2="${P}" y2="${H - P}" />`;
+
+  if (opts.baselines) {
+    for (const b of opts.baselines) {
+      const y = sy(b);
+      svg += `<line class="baseline" x1="${P}" y1="${y}" x2="${W - P}" y2="${y}" />`;
+      svg += `<text class="label" x="${W - P - 2}" y="${y - 3}" text-anchor="end">${b}</text>`;
+    }
+  }
+
+  series.forEach((s, si) => {
+    const pts = s.points;
+    if (!pts.length) return;
+    const d = pts.map((p, i) => (i === 0 ? "M" : "L") + sx(i, pts.length).toFixed(1) + " " + sy(p.v).toFixed(1)).join(" ");
+    svg += `<path class="line ${si === 1 ? 'second' : ''}" d="${d}" />`;
+    pts.forEach((p, i) => {
+      svg += `<circle class="dot ${si === 1 ? 'second' : ''}" cx="${sx(i, pts.length)}" cy="${sy(p.v)}" r="2" fill="${si === 1 ? 'var(--ok)' : 'var(--fg)'}" />`;
+    });
+  });
+
+  /* axis range labels */
+  svg += `<text class="label" x="${P - 4}" y="${P + 6}" text-anchor="end">${vmax.toFixed(1)}</text>`;
+  svg += `<text class="label" x="${P - 4}" y="${H - P}" text-anchor="end">${vmin.toFixed(1)}</text>`;
+
+  svg += `</svg>`;
+  el.innerHTML = svg;
+}
+
+/* ────────────────────────────────────────────────────────────
+   log colouring
+   ──────────────────────────────────────────────────────────── */
+function colourLog(txt) {
+  if (!txt) return "";
+  const filtered = txt.split("\n").filter(line => {
+    if (!line.trim()) return false;
+    if (/\[msg#\d+\]/.test(line)) return false;  // noisy internal
+    return true;
+  }).slice(-30);
+  return filtered.map(line => {
+    const safe = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    if (/error|exception|traceback|not logged|failed/i.test(line))
+      return `<span class="err">${safe}</span>`;
+    if (/run complete|session|forwarding|starting fresh|resuming/i.test(line))
+      return `<span class="info">${safe}</span>`;
+    if (/\[tool\]|\[text\]/i.test(line))
+      return `<span class="tool">${safe}</span>`;
+    return safe;
+  }).join("\n");
+}
+
+/* ────────────────────────────────────────────────────────────
+   run tooltip
+   ──────────────────────────────────────────────────────────── */
+const tooltip = document.getElementById("run-tooltip");
+document.addEventListener("mousemove", (e) => {
+  if (tooltip.classList.contains("show")) {
+    tooltip.style.left = (e.clientX + 12) + "px";
+    tooltip.style.top  = (e.clientY + 12) + "px";
+  }
+});
+
+/* ────────────────────────────────────────────────────────────
+   main updater
+   ──────────────────────────────────────────────────────────── */
+let lastData = null;
+let lastFetchTs = null;
+
+function fmtAgo(iso) {
+  if (!iso) return "—";
+  const diffSec = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (diffSec < 60)  return `${Math.round(diffSec)}s ago`;
+  if (diffSec < 3600) return `${Math.round(diffSec/60)}m ago`;
+  return `${Math.round(diffSec/3600)}h ago`;
+}
+
+function classifyProvider(env) {
+  const bu = (env && env.ANTHROPIC_BASE_URL) || "";
+  const tk = (env && env.ANTHROPIC_AUTH_TOKEN) || "";
+  if (bu.includes("z.ai")) return { name: "Z.AI GLM-4.7", ok: tk && tk !== "<MISSING>" };
+  if (bu.includes("anthropic.com") || (!bu && tk)) return { name: "Anthropic direct", ok: tk && tk !== "<MISSING>" };
+  if (bu) return { name: bu, ok: tk && tk !== "<MISSING>" };
+  return { name: "unconfigured", ok: false };
+}
+
+function update(state) {
+  lastData = state;
+  lastFetchTs = Date.now();
+
+  /* live ts */
+  document.getElementById("live-ts").textContent =
+    `updated ${fmtAgo(state.timestamp)}`;
+
+  /* hero agent state */
+  const ind = document.getElementById("state-indicator");
+  const nm  = document.getElementById("state-name");
+  const sb  = document.getElementById("state-sub");
+  const agent = (state.agents && state.agents[0]) || null;
+  ind.className = "state-indicator";
+  if (!agent) {
+    nm.textContent = "STOPPED"; sb.textContent = "no agent process";
+    ind.classList.add("err");
+  } else if (agent.state === "running") {
+    nm.textContent = "RUNNING"; sb.textContent = `pid ${agent.pid} · port ${agent.port}`;
+  } else if (agent.state === "sleeping") {
+    nm.textContent = "SLEEPING"; sb.textContent = "awaiting trigger";
+    ind.classList.add("warn");
+  } else if (agent.state === "error") {
+    nm.textContent = "ERROR"; sb.textContent = agent.pid ? `pid ${agent.pid}` : "restart pending";
+    ind.classList.add("err");
+  } else {
+    nm.textContent = (agent.state || "—").toUpperCase(); sb.textContent = agent.pid ? `pid ${agent.pid}` : "";
+  }
+
+  /* provider */
+  const p = classifyProvider(state.env_snapshot);
+  document.getElementById("provider-name").textContent = p.name.split(" ")[0];
+  document.getElementById("provider-detail").textContent =
+    p.ok ? `${p.name} · auth ready` : `${p.name} · auth MISSING`;
+
+  /* runs */
+  const runs = state.runs || [];
+  const latest = runs[runs.length - 1];
+  document.getElementById("run-num").textContent =
+    latest ? `#${latest.run_num}` : "—";
+  const outcome = document.getElementById("run-outcome");
+  if (latest) {
+    outcome.textContent = latest.error ? " err" : " ok";
+    outcome.style.color = latest.error ? "var(--err)" : "var(--ok)";
+  } else {
+    outcome.textContent = "";
+  }
+  document.getElementById("run-detail").textContent = latest
+    ? `turns ${latest.turns || 0} · ${latest.session_id ? latest.session_id.slice(0,8) : '—'}`
+    : "no runs yet";
+
+  /* cumulative cost */
+  const total = runs.reduce((s, r) => s + (r.cost_usd || 0), 0);
+  document.getElementById("total-cost").textContent = total.toFixed(2);
+  document.getElementById("run-count").textContent = runs.length;
+
+  /* counters */
+  const f = state.findings || {};
+  [...FINDING_KEYS.map(x=>x.key), "weekly_reports"].forEach(key => {
+    const el = document.querySelector(`.counter[data-key="${key}"] .n`);
+    if (!el) return;
+    const prev = parseInt(el.dataset.n || "0", 10);
+    const now  = f[key] || 0;
+    if (prev !== now) {
+      el.parentElement.classList.add("pulse");
+      setTimeout(() => el.parentElement.classList.remove("pulse"), 600);
+      animateNumber(el, prev, now);
+    }
+  });
+
+  /* progress bar */
+  const candN = f.candidates || 0;
+  const lbN = (state.leaderboard && state.leaderboard.candidates || []).length;
+  const target = 1;  // first leaderboard entry
+  const pct = Math.min(100, (lbN / target) * 100);
+  document.getElementById("progress-fill").style.width = pct + "%";
+  document.getElementById("progress-label").textContent =
+    lbN >= target ? `${lbN} on leaderboard` : `${candN} generated · ${lbN}/${target} scored`;
+  document.getElementById("cand-meta").textContent =
+    `${candN} total · ${lbN} public`;
+
+  /* env plumbing */
+  const env = state.env_snapshot || {};
+  REQ_ENV.forEach(({ k }) => {
+    const row = envList.querySelector(`[data-k="${k}"]`);
+    const v = env[k];
+    const missing = !v || v === "<MISSING>" || v === "";
+    row.classList.toggle("missing", missing);
+    row.querySelector(".check").textContent = missing ? "×" : "✓";
+    const disp = v && v !== "<MISSING>"
+      ? (k === "ANTHROPIC_AUTH_TOKEN" ? "<set>" : String(v))
+      : "MISSING";
+    row.querySelector(".val").textContent = disp;
+  });
+
+  /* timeline */
+  const tl = document.getElementById("timeline");
+  tl.innerHTML = "";
+  const tlRuns = runs.slice(-50);
+  let ok = 0, fail = 0;
+  tlRuns.forEach(r => {
+    const d = document.createElement("div");
+    d.className = "run-dot " + (r.error === false ? "ok" : r.error === true ? "err" : "pending");
+    if (r.error === false) ok++; else if (r.error === true) fail++;
+    d.addEventListener("mouseenter", (e) => {
+      tooltip.innerHTML =
+        `run #${r.run_num} · ${r.error ? 'ERR' : 'OK'}<br>` +
+        `session ${r.session_id ? r.session_id.slice(0,8) : '—'}<br>` +
+        `turns ${r.turns || 0} · $${(r.cost_usd || 0).toFixed(4)}` +
+        (r.error_message ? `<br><span style="color:var(--err)">${r.error_message.slice(0,120)}</span>` : "");
+      tooltip.classList.add("show");
+    });
+    d.addEventListener("mouseleave", () => tooltip.classList.remove("show"));
+    tl.appendChild(d);
+  });
+  if (tlRuns.length) {
+    const pct = (ok / (ok + fail || 1) * 100);
+    document.getElementById("pass-pct").textContent = pct.toFixed(0) + "%";
+  }
+
+  /* positive control chart */
+  const posPts = ((state.loop_health || {}).positive_control || []).map((e, i) => {
+    const novo = (e.runs || []).find(r => r.name === "novobiocin");
+    return novo && novo.delta_g_kcalmol != null ? { i, v: novo.delta_g_kcalmol } : null;
+  }).filter(Boolean);
+  renderLine("positive-chart",
+    posPts.length ? [{ points: posPts }] : [],
+    { baselines: [-9.0], vmin: -12, vmax: -5 });
+
+  /* negative control: dual ef1% + roc_auc */
+  const negRuns = (state.loop_health || {}).negative_control || [];
+  if (negRuns.length) {
+    const ef = negRuns.map((r, i) => ({ i, v: r.ef1 != null ? r.ef1 : null })).filter(x => x.v != null);
+    const auc = negRuns.map((r, i) => ({ i, v: r.roc_auc != null ? r.roc_auc * 10 : null })).filter(x => x.v != null);
+    renderLine("negative-chart",
+      [{ points: ef }, { points: auc }],
+      { baselines: [5], vmin: 0, vmax: 10 });
+  } else {
+    renderLine("negative-chart", []);
+  }
+
+  /* alert banners */
+  const posAlert = (state.loop_health || {}).positive_alert;
+  const negAlert = (state.loop_health || {}).negative_alert;
+  document.querySelectorAll(".alert-banner").forEach(n => n.remove());
+  if (posAlert) {
+    const p = document.getElementById("positive-card");
+    const b = document.createElement("div");
+    b.className = "alert-banner";
+    b.textContent = "HALT · positive control drifted";
+    p.insertBefore(b, p.children[1]);
+  }
+  if (negAlert) {
+    const n = document.getElementById("negative-card");
+    const b = document.createElement("div");
+    b.className = "alert-banner";
+    b.textContent = "HALT · actives/decoys separation below threshold";
+    n.insertBefore(b, n.children[1]);
+  }
+
+  /* leaderboard */
+  const lbBody = document.getElementById("leaderboard-body");
+  const cands  = (state.leaderboard && state.leaderboard.candidates) || [];
+  if (!cands.length) {
+    lbBody.innerHTML = `<div class="empty-state">agent warming up.<br>first candidate in progress…</div>`;
+  } else {
+    lbBody.innerHTML = cands.slice(0,5).map((c, i) => {
+      const s = c.rigor_score || 0;
+      return `
+        <div class="lb-row">
+          <div class="rank">${i + 1}</div>
+          <div class="cid">${c.candidate_id || "—"}</div>
+          <div class="score-wrap">
+            <div class="score-bar"><div class="fill" style="width:${(s*100).toFixed(0)}%"></div></div>
+            <div class="score-num">${s.toFixed(3)}</div>
+          </div>
+        </div>`;
+    }).join("");
+  }
+  document.getElementById("lb-meta").textContent = cands.length
+    ? `top ${Math.min(5,cands.length)} · rigor ≥ 0.83`
+    : `empty · awaiting first pass`;
+
+  /* log */
+  const logEl = document.getElementById("log-tail");
+  const shouldStick = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 20;
+  logEl.innerHTML = colourLog(state.recent_log);
+  if (shouldStick) logEl.scrollTop = logEl.scrollHeight;
+
+  /* 12-layer chain — the "active" sweep hints at live processing */
+  const gates = chainEl.querySelectorAll(".gate");
+  gates.forEach(g => g.classList.remove("active"));
+  if (latest && !latest.error) {
+    /* simulate a molecule flowing through after a healthy run */
+    /* (the real-per-candidate trace is written into gate .bar fills once we have dossier data) */
+  }
+}
+
+/* ────────────────────────────────────────────────────────────
+   live ticker (ago updates even when no new data)
+   ──────────────────────────────────────────────────────────── */
+setInterval(() => {
+  if (!lastData) return;
+  document.getElementById("live-ts").textContent =
+    `updated ${fmtAgo(lastData.timestamp)}`;
+}, 1000);
+
+/* ────────────────────────────────────────────────────────────
+   fetch loop
+   ──────────────────────────────────────────────────────────── */
+let consecutiveFails = 0;
+async function tick() {
+  const live = document.getElementById("live-indicator");
+  try {
+    const r = await fetch("/api/state?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    consecutiveFails = 0;
+    live.className = "live";
+    update(j);
+  } catch (e) {
+    consecutiveFails++;
+    live.className = consecutiveFails < 3 ? "live warn" : "live err";
+    document.getElementById("live-ts").textContent =
+      consecutiveFails < 3 ? "reconnecting…" : "offline (start proxy)";
+  }
+}
+tick();
+setInterval(tick, 5000);
+</script>
+
+</body>
+</html>
