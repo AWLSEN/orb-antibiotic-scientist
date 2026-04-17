@@ -124,14 +124,39 @@ upload_config() {
 trigger_build() {
     local cid; cid=$(cat "$COMPUTER_FILE")
     log "triggering build on $cid (this blocks ~30-120s)"
-    local payload='{"org_secrets":{}}'
-    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-        payload=$(jq -n --arg t "$GITHUB_TOKEN" '{org_secrets:{GITHUB_TOKEN:$t}}')
+    local provider="${ORB_LLM_PROVIDER:-zai}"
+
+    # Resolve Z.AI key: env var first, cached file as fallback.
+    local zai_key="${ANTHROPIC_AUTH_TOKEN:-}"
+    if [[ -z "$zai_key" && -f "$STATE_DIR/zai-key" ]]; then
+        zai_key=$(cat "$STATE_DIR/zai-key")
     fi
+
+    # Build org_secrets map. Orb resolves "${NAME}" placeholders in
+    # orb.toml [agent.env] against these values at build time.
+    local secrets='{}'
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        secrets=$(jq -n --arg t "$GITHUB_TOKEN" '{GITHUB_TOKEN: $t}')
+    fi
+    case "$provider" in
+        zai)
+            [[ -n "$zai_key" ]] || die "ANTHROPIC_AUTH_TOKEN (Z.AI key) required"
+            secrets=$(jq -n --argjson base "$secrets" --arg t "$zai_key" \
+                '$base + {ANTHROPIC_AUTH_TOKEN: $t}')
+            ;;
+        anthropic)
+            : "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY required for provider=anthropic}"
+            secrets=$(jq -n --argjson base "$secrets" --arg k "$ANTHROPIC_API_KEY" \
+                '$base + {ANTHROPIC_API_KEY: $k}')
+            ;;
+    esac
+
+    local payload
+    payload=$(jq -n --argjson s "$secrets" '{org_secrets: $s}')
     curl -fsS "${auth_hdr[@]}" -X POST "$BASE_URL/v1/computers/$cid/build" \
         -H 'Content-Type: application/json' \
         -d "$payload" \
-        | jq -c '.'
+        | jq -c '.success as $s | {success: $s, steps_n: (.steps | length)}'
 }
 
 start_agent() {
@@ -139,39 +164,10 @@ start_agent() {
     local provider="${ORB_LLM_PROVIDER:-zai}"
     local payload
 
-    case "$provider" in
-        zai)
-            local key="${ANTHROPIC_AUTH_TOKEN:-}"
-            if [[ -z "$key" && -f "$STATE_DIR/zai-key" ]]; then
-                key=$(cat "$STATE_DIR/zai-key")
-            fi
-            [[ -n "$key" ]] || die "ANTHROPIC_AUTH_TOKEN (Z.AI key) required for provider=zai"
-            log "starting agent on $cid (provider=zai → routing to Z.AI GLM Coding Plan)"
-            # Send ALL Z.AI env vars via org_secrets. The [env] section in
-            # orb.toml is not reliably applied — only org_secrets reaches
-            # the agent process for sure.
-            payload=$(jq -n --arg k "$key" '{
-                task:"start",
-                org_secrets:{
-                    ANTHROPIC_AUTH_TOKEN:           $k,
-                    ANTHROPIC_BASE_URL:             "https://api.z.ai/api/anthropic",
-                    API_TIMEOUT_MS:                 "3000000",
-                    ANTHROPIC_DEFAULT_OPUS_MODEL:   "GLM-4.7",
-                    ANTHROPIC_DEFAULT_SONNET_MODEL: "GLM-4.7",
-                    ANTHROPIC_DEFAULT_HAIKU_MODEL:  "GLM-4.5-Air"
-                }
-            }')
-            ;;
-        anthropic)
-            : "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY required for provider=anthropic}"
-            log "starting agent on $cid (provider=anthropic → native Anthropic API)"
-            payload=$(jq -n --arg k "$ANTHROPIC_API_KEY" \
-                '{task:"start",org_secrets:{ANTHROPIC_API_KEY:$k}}')
-            ;;
-        *)
-            die "unknown ORB_LLM_PROVIDER=$provider (expected 'zai' or 'anthropic')"
-            ;;
-    esac
+    # Env is plumbed via orb.toml [agent.env] + org_secrets on BUILD.
+    # /agents only needs to ask Orb to start the process.
+    log "starting agent on $cid (provider=$provider; env applied from orb.toml [agent.env])"
+    payload='{"task":"start"}'
 
     local resp
     resp=$(curl -fsS "${auth_hdr[@]}" -X POST "$BASE_URL/v1/computers/$cid/agents" \

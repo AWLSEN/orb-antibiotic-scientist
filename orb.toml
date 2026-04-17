@@ -47,17 +47,23 @@ expose = [8000]
 runtime = "4GB"
 disk    = "10GB"
 
-[env]
-# Non-secret environment. Secrets are passed via org_secrets at deploy
-# time (see scripts/orb_deploy.sh).
-PYTHONUNBUFFERED           = "1"
-ORB_ANTIBIOTIC_TARGET      = "targets/mrsa-gyrb.yaml"
+[agent.env]
+# Orb injects this section into the agent process env. Bare strings are
+# literal; "${VAR}" placeholders are filled from org_secrets at deploy
+# time. Substring interpolation ("Bearer ${VAR}") is NOT supported.
+PYTHONUNBUFFERED                = "1"
+ORB_ANTIBIOTIC_TARGET           = "targets/mrsa-gyrb.yaml"
 
-# Z.AI GLM Coding Plan routing. The Agent SDK + Claude Code CLI read
-# these exactly like native Anthropic env vars. ANTHROPIC_AUTH_TOKEN
-# is a secret and is passed via org_secrets, not listed here.
+# Z.AI GLM Coding Plan routing — literal values (non-secret).
 ANTHROPIC_BASE_URL              = "https://api.z.ai/api/anthropic"
 API_TIMEOUT_MS                  = "3000000"
 ANTHROPIC_DEFAULT_OPUS_MODEL    = "GLM-4.7"
 ANTHROPIC_DEFAULT_SONNET_MODEL  = "GLM-4.7"
 ANTHROPIC_DEFAULT_HAIKU_MODEL   = "GLM-4.5-Air"
+
+# Secrets: MUST use the "${NAME}" placeholder form. The matching secret
+# is supplied via the build endpoint's org_secrets JSON field (see
+# scripts/orb_deploy.sh). Without a matching secret the variable
+# resolves to the empty string.
+ANTHROPIC_AUTH_TOKEN            = "${ANTHROPIC_AUTH_TOKEN}"
+ANTHROPIC_API_KEY               = "${ANTHROPIC_API_KEY}"
