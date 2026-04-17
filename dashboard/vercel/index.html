@@ -259,20 +259,36 @@ header .clock {
 }
 
 /* ── Candidates ─────────────────────────────────────────── */
-.candidates {
-  display: flex; flex-direction: column;
-}
+.candidates { display: flex; flex-direction: column; }
 .cand-row {
-  display: grid; grid-template-columns: auto 1fr auto;
-  gap: 1rem; align-items: center;
-  padding: 0.8rem 0;
+  display: grid; grid-template-columns: 32px 1fr auto;
+  gap: 1rem; align-items: start;
+  padding: 1rem 0;
   border-bottom: 1px solid var(--line);
-  font-family: var(--mono); font-size: 0.82rem;
 }
 .cand-row:last-child { border-bottom: none; }
-.cand-row .n { color: var(--fg-faint); font-size: 0.75rem; }
-.cand-row .id { color: var(--fg); }
-.cand-row .ago { color: var(--fg-dim); font-size: 0.72rem; }
+.cand-n {
+  font-family: var(--mono); font-size: 0.72rem;
+  color: var(--fg-faint); padding-top: 2px;
+}
+.cand-body { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
+.cand-id {
+  font-family: var(--mono); font-size: 0.8rem;
+  color: var(--fg); font-weight: 500;
+}
+.cand-name {
+  font-size: 0.82rem; color: var(--fg-dim);
+}
+.cand-smi {
+  font-family: var(--mono); font-size: 0.72rem;
+  color: var(--fg-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%;
+}
+.cand-ago {
+  font-family: var(--mono); font-size: 0.72rem;
+  color: var(--fg-dim); padding-top: 2px; white-space: nowrap;
+}
 .cand-empty {
   padding: 2rem; text-align: center; color: var(--fg-dim);
   font-family: var(--mono); font-size: 0.82rem;
@@ -537,42 +553,69 @@ function classifyAgentState(state) {
   const a = (state.agents || [])[0];
   if (!a) return { label: "STOPPED", cls: "err", detail: "no agent process" };
   const s = (a.state || "").toLowerCase();
-  if (s === "running") return { label: "AWAKE", cls: "awake", detail: `pid ${a.pid}` };
-  if (s === "checkpointed" || s === "sleeping")
-    return { label: "SLEEPING", cls: "asleep", detail: "checkpointed to NVMe" };
+  if (s === "running")
+    return { label: "AWAKE", cls: "awake", detail: `pid ${a.pid}` };
+  if (s === "dumping" || s === "checkpointing")
+    return { label: "CHECKPOINTING", cls: "asleep", detail: "writing state → NVMe" };
+  if (s === "restoring" || s === "waking")
+    return { label: "WAKING", cls: "awake", detail: "restoring from NVMe" };
+  if (s === "checkpointed" || s === "sleeping" || s === "frozen")
+    return { label: "SLEEPING", cls: "asleep", detail: "checkpointed to NVMe · zero cost" };
   if (s === "error")
     return { label: "ERROR", cls: "err", detail: a.pid ? `pid ${a.pid}` : "restart pending" };
   return { label: s.toUpperCase(), cls: "asleep", detail: "" };
 }
 
-function classifyAction(state, events, now) {
+function classifyAction(state, events) {
+  const candCount = (state.findings && state.findings.candidates) || 0;
   const runs = (state.runs || []);
   const latest = runs[runs.length - 1];
   const envOk = (state.env_snapshot || {}).ANTHROPIC_AUTH_TOKEN &&
                 (state.env_snapshot || {}).ANTHROPIC_AUTH_TOKEN !== "<MISSING>";
   if (!envOk) return { action: "auth not configured", sub: "ANTHROPIC_AUTH_TOKEN missing" };
 
-  if (latest) {
-    if (!latest.error && latest.turns >= 2) {
-      const cnt = (state.findings && state.findings.candidates) || 0;
-      return { action: `designed ${cnt} candidate${cnt===1?'':'s'}`, sub: `last run · ${latest.turns} turns` };
-    }
-    if (latest.error) {
-      const msg = latest.error_message ? latest.error_message.slice(0, 60) : "last run errored";
-      return { action: "recovering", sub: msg };
-    }
+  // We prefer the live signal over parsed "Run complete" because the agent
+  // may still be mid-turn, with no 'Run complete' in the log yet.
+  const agentState = ((state.agents || [])[0] || {}).state || "";
+  if (agentState === "running") {
+    if (candCount > 0)
+      return { action: `designing · ${candCount} ready`, sub: "multi-turn active" };
+    return { action: "designing first candidate", sub: "multi-turn active" };
+  }
+  if (agentState === "dumping") {
+    return { action: "saving state", sub: "memory → NVMe snapshot" };
+  }
+  if (agentState === "checkpointed" || agentState === "sleeping") {
+    if (candCount > 0)
+      return { action: `${candCount} candidate${candCount===1?'':'s'} designed`,
+               sub: "sleeping until next trigger" };
+    return { action: "standby", sub: "awaiting first trigger" };
+  }
+  if (latest && latest.error) {
+    const msg = latest.error_message ? latest.error_message.slice(0, 60) : "last run errored";
+    return { action: "recovering", sub: msg };
+  }
+  if (latest && !latest.error && latest.turns >= 2) {
+    return { action: `designed ${candCount} candidate${candCount===1?'':'s'}`,
+             sub: `last run · ${latest.turns} turns` };
   }
   return { action: "warming up", sub: "first run pending" };
 }
 
-function fmtCandRow(cand, i, now) {
-  // cand is a candidate dir object from Orb files API (name + maybe designed_at).
+function fmtCandRow(cand, i) {
   const tsISO = cand.designed_at || null;
+  const smi = cand.smiles ? String(cand.smiles) : "";
+  const smiShort = smi.length > 60 ? smi.slice(0, 58) + "…" : smi;
+  const name = cand.name ? cand.name : "";
   return `
     <div class="cand-row">
-      <div class="n">${String(i + 1).padStart(2, '0')}</div>
-      <div class="id">${cand.candidate_id || cand.name}</div>
-      <div class="ago">${tsISO ? fmtAgo(tsISO) : '—'}</div>
+      <div class="cand-n">${String(i + 1).padStart(2, '0')}</div>
+      <div class="cand-body">
+        <div class="cand-id">${cand.candidate_id || cand.name || '—'}</div>
+        ${name ? `<div class="cand-name">${name}</div>` : ""}
+        ${smi ? `<div class="cand-smi" title="${smi.replace(/"/g,'&quot;')}">${smiShort}</div>` : ""}
+      </div>
+      <div class="cand-ago">${tsISO ? fmtAgo(tsISO) : '—'}</div>
     </div>`;
 }
 
