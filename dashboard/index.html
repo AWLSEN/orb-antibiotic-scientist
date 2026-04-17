@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>orb-antibiotic-scientist · live</title>
+<style>
+  :root {
+    --bg:       #0b0d10;
+    --surface:  #14181d;
+    --surface2: #1b2128;
+    --fg:       #e7eaee;
+    --dim:      #8a93a0;
+    --accent:   #6ee7b7;
+    --warn:     #fbbf24;
+    --alert:    #f87171;
+    --good:     #34d399;
+    --radius:   8px;
+    --font:     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono:     ui-monospace, SFMono-Regular, Menlo, Monaco, "Cascadia Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: var(--font); background: var(--bg); color: var(--fg);
+    line-height: 1.5;
+  }
+  header {
+    border-bottom: 1px solid #22272e;
+    padding: 1.2rem 1.6rem;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 1rem;
+  }
+  header h1 { margin: 0; font-size: 1.3rem; font-weight: 600; letter-spacing: -0.01em; }
+  header .sub { color: var(--dim); font-size: 0.9rem; }
+  .status { display: flex; gap: 1rem; align-items: center; font-size: 0.9rem; }
+  .status .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    display: inline-block; margin-right: 6px;
+  }
+  .dot.ok   { background: var(--good); box-shadow: 0 0 8px var(--good); }
+  .dot.sleep{ background: var(--dim);  box-shadow: 0 0 8px var(--dim); }
+  .dot.warn { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+  .dot.alert{ background: var(--alert); box-shadow: 0 0 8px var(--alert); }
+  main {
+    max-width: 1200px; margin: 0 auto; padding: 1.6rem;
+    display: grid; gap: 1.6rem;
+  }
+  .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .card {
+    background: var(--surface); border: 1px solid #22272e; border-radius: var(--radius);
+    padding: 1.1rem 1.2rem;
+  }
+  .card h2 {
+    margin: 0 0 0.8rem 0; font-size: 0.95rem; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--dim); font-weight: 600;
+  }
+  .metric .value {
+    font-family: var(--mono); font-size: 2.3rem; line-height: 1; font-weight: 500;
+  }
+  .metric .unit { color: var(--dim); font-size: 0.9rem; margin-left: 0.3rem; }
+  .metric .detail { color: var(--dim); font-size: 0.85rem; margin-top: 0.5rem; }
+
+  table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 0.85rem; }
+  th, td {
+    text-align: left; padding: 0.55rem 0.6rem; border-bottom: 1px solid #22272e;
+  }
+  th { color: var(--dim); font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.75rem; }
+  td.rigor { color: var(--accent); font-weight: 600; }
+  td.cid   { color: var(--fg); }
+  td.smiles { color: var(--dim); font-size: 0.8rem; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .bar {
+    height: 4px; background: #22272e; border-radius: 2px; overflow: hidden; display: inline-block;
+    width: 80px; vertical-align: middle; margin-right: 6px;
+  }
+  .bar > .fill { height: 100%; background: var(--accent); }
+
+  .disclaimer {
+    color: var(--dim); font-size: 0.8rem; padding: 1rem; border: 1px dashed #22272e;
+    border-radius: var(--radius);
+  }
+  .disclaimer strong { color: var(--warn); }
+
+  .chart { height: 140px; position: relative; }
+  .chart svg { width: 100%; height: 100%; }
+  .chart .axis { stroke: #22272e; stroke-width: 1; }
+  .chart .line { fill: none; stroke: var(--accent); stroke-width: 2; }
+  .chart .baseline { stroke: var(--warn); stroke-dasharray: 3 3; stroke-width: 1; }
+
+  footer {
+    text-align: center; padding: 1.2rem; color: var(--dim); font-size: 0.8rem;
+    border-top: 1px solid #22272e; margin-top: 1rem;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); color: var(--accent); }
+  @media (max-width: 600px) {
+    header { flex-direction: column; align-items: flex-start; }
+    .metric .value { font-size: 1.8rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>orb-antibiotic-scientist</h1>
+    <div class="sub">
+      Autonomous AI medicinal chemist · designing candidates for MRSA DNA gyrase B
+      · <a href="https://github.com/nextbysam/orb-antibiotic-scientist">github</a>
+    </div>
+  </div>
+  <div class="status" id="agent-status">
+    <span><span class="dot" id="agent-dot"></span><span id="agent-state">loading…</span></span>
+    <span id="last-update" class="sub"></span>
+  </div>
+</header>
+
+<main>
+
+  <section class="grid" id="metrics"></section>
+
+  <section class="card">
+    <h2>Top candidates</h2>
+    <div id="leaderboard-body">
+      <p class="sub">loading leaderboard…</p>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <h2>Positive control · reference ΔG</h2>
+      <div class="chart" id="positive-chart">
+        <p class="sub">loading…</p>
+      </div>
+      <div class="sub" id="positive-summary"></div>
+    </div>
+    <div class="card">
+      <h2>Negative control · EF1% + ROC-AUC</h2>
+      <div class="chart" id="negative-chart">
+        <p class="sub">loading…</p>
+      </div>
+      <div class="sub" id="negative-summary"></div>
+    </div>
+  </section>
+
+  <section class="disclaimer">
+    <strong>⚠️ Computational hypotheses only.</strong> The candidates ranked below
+    have <em>not</em> been synthesised or tested in any biological assay. They are
+    outputs of an autonomous AI pipeline intended as starting points for
+    experimental medicinal chemistry. Nothing here is medical advice, a drug, or
+    a regulatory-reviewed substance. See
+    <a href="https://github.com/nextbysam/orb-antibiotic-scientist/blob/main/DISCLAIMER.md">DISCLAIMER.md</a>.
+  </section>
+
+</main>
+
+<footer>
+  running on <a href="https://orbcloud.dev">Orb Cloud</a> — agent sleeps between
+  candidates, wakes in ~1 s on inbound HTTP or LLM response. auto-refresh every
+  30 s.
+</footer>
+
+<script>
+  const DATA_ROOT = window.DATA_ROOT || ".";
+
+  async function fetchJSON(path) {
+    try {
+      const resp = await fetch(path + "?t=" + Date.now(), { cache: "no-store" });
+      if (!resp.ok) throw new Error(resp.status);
+      return await resp.json();
+    } catch (e) { return null; }
+  }
+
+  async function fetchJSONL(path) {
+    try {
+      const resp = await fetch(path + "?t=" + Date.now(), { cache: "no-store" });
+      if (!resp.ok) throw new Error(resp.status);
+      const text = await resp.text();
+      return text.split("\n").filter(l => l.trim()).map(l => {
+        try { return JSON.parse(l); } catch { return null; }
+      }).filter(Boolean);
+    } catch (e) { return []; }
+  }
+
+  function renderMetrics(board, health) {
+    const container = document.getElementById("metrics");
+    const numCands = (board && board.candidates && board.candidates.length) || 0;
+    const topRigor = numCands ? board.candidates[0].rigor_score : null;
+    const nPassed = numCands;
+    const latestPos = health.positive.slice(-1)[0];
+    const latestNeg = health.negative.slice(-1)[0];
+    container.innerHTML = `
+      <div class="card metric">
+        <h2>Candidates on board</h2>
+        <div class="value">${numCands}</div>
+        <div class="detail">above rigor threshold · public</div>
+      </div>
+      <div class="card metric">
+        <h2>Top rigor score</h2>
+        <div class="value">${topRigor !== null ? topRigor.toFixed(3) : "—"}</div>
+        <div class="detail">${numCands ? board.candidates[0].candidate_id : "leaderboard empty"}</div>
+      </div>
+      <div class="card metric">
+        <h2>ROC-AUC (latest)</h2>
+        <div class="value">${latestNeg ? (latestNeg.roc_auc || 0).toFixed(3) : "—"}</div>
+        <div class="detail">actives vs DUD-E decoys</div>
+      </div>
+      <div class="card metric">
+        <h2>EF1% (latest)</h2>
+        <div class="value">${latestNeg ? (latestNeg.ef1 || 0).toFixed(1) : "—"}</div>
+        <div class="detail">enrichment at 1% of ranked list</div>
+      </div>
+    `;
+  }
+
+  function renderLeaderboard(board) {
+    const body = document.getElementById("leaderboard-body");
+    if (!board || !board.candidates || !board.candidates.length) {
+      body.innerHTML = '<p class="sub">no candidates yet — agent is warming up.</p>';
+      return;
+    }
+    const rows = board.candidates.slice(0, 20).map((c, i) => {
+      const score = c.rigor_score || 0;
+      const barWidth = Math.round(score * 100);
+      return `
+        <tr>
+          <td>${i + 1}</td>
+          <td class="cid">${c.candidate_id || "—"}</td>
+          <td class="smiles" title="${c.smiles || ""}">${c.smiles || "—"}</td>
+          <td class="rigor">
+            <span class="bar"><span class="fill" style="width:${barWidth}%"></span></span>
+            ${score.toFixed(3)}
+          </td>
+          <td>${(c.sub_scores?.docking ?? 0).toFixed(2)}</td>
+          <td>${(c.sub_scores?.novelty ?? 0).toFixed(2)}</td>
+          <td>${(c.sub_scores?.admet ?? 0).toFixed(2)}</td>
+          <td>${(c.sub_scores?.mechanism ?? 0).toFixed(2)}</td>
+        </tr>`;
+    }).join("");
+    body.innerHTML = `
+      <table>
+        <thead><tr>
+          <th>#</th><th>id</th><th>SMILES</th>
+          <th>rigor</th><th>dock</th><th>novel</th><th>ADMET</th><th>mech</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }
+
+  function renderLineChart(containerId, points, yAccessor, yLabel, invert = false) {
+    const el = document.getElementById(containerId);
+    if (!points || !points.length) {
+      el.innerHTML = '<p class="sub">no data yet.</p>';
+      return;
+    }
+    const W = el.clientWidth || 400, H = 140, PAD = 20;
+    const values = points.map(yAccessor).filter(v => v !== null && v !== undefined);
+    if (!values.length) {
+      el.innerHTML = '<p class="sub">no numeric data yet.</p>';
+      return;
+    }
+    const vmin = Math.min(...values), vmax = Math.max(...values);
+    const span = Math.max(0.01, vmax - vmin);
+    const sx = (i) => PAD + ((W - 2 * PAD) * i) / Math.max(1, points.length - 1);
+    const sy = (v) => {
+      const t = (v - vmin) / span;
+      return invert ? PAD + (H - 2 * PAD) * t : H - PAD - (H - 2 * PAD) * t;
+    };
+    const path = points.map((p, i) => {
+      const v = yAccessor(p);
+      return (i === 0 ? "M " : "L ") + sx(i).toFixed(1) + " " + sy(v).toFixed(1);
+    }).join(" ");
+    el.innerHTML = `
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+        <line class="axis" x1="${PAD}" y1="${H - PAD}" x2="${W - PAD}" y2="${H - PAD}" />
+        <line class="axis" x1="${PAD}" y1="${PAD}" x2="${PAD}" y2="${H - PAD}" />
+        <path class="line" d="${path}" />
+      </svg>
+    `;
+  }
+
+  function renderAgentStatus(board, health) {
+    const posAlert = health.positiveAlert;
+    const negAlert = health.negativeAlert;
+    const dot = document.getElementById("agent-dot");
+    const lbl = document.getElementById("agent-state");
+    const ts = document.getElementById("last-update");
+    let state = "sleeping — wake on next candidate", cls = "sleep";
+    if (posAlert || negAlert) {
+      state = "HALT — pipeline alert"; cls = "alert";
+    } else if (board && board.candidates && board.candidates.length > 0) {
+      state = "healthy"; cls = "ok";
+    }
+    dot.className = "dot " + cls;
+    lbl.textContent = state;
+    const when = (board && board.updated_at) || new Date().toISOString();
+    ts.textContent = "last update: " + when;
+  }
+
+  async function refresh() {
+    const [board, positive, negative, positiveAlert, negativeAlert] = await Promise.all([
+      fetchJSON(DATA_ROOT + "/findings/leaderboard.json"),
+      fetchJSONL(DATA_ROOT + "/findings/loop-health/positive-control.jsonl"),
+      fetchJSONL(DATA_ROOT + "/findings/loop-health/negative-control.jsonl"),
+      fetchJSON(DATA_ROOT + "/findings/loop-health/positive-control-alert.json"),
+      fetchJSON(DATA_ROOT + "/findings/loop-health/negative-control-alert.json"),
+    ]);
+    const health = { positive, negative, positiveAlert, negativeAlert };
+
+    renderMetrics(board, health);
+    renderLeaderboard(board);
+    renderAgentStatus(board, health);
+
+    renderLineChart("positive-chart", positive, (r) => {
+      const novobio = (r.runs || []).find(x => x.name === "novobiocin");
+      return novobio ? novobio.delta_g_kcalmol : null;
+    }, "ΔG (kcal/mol)", true);
+
+    const posSum = document.getElementById("positive-summary");
+    posSum.textContent = positive.length
+      ? positive.length + " runs · latest " + (positive.slice(-1)[0].timestamp || "?")
+      : "no runs yet.";
+
+    renderLineChart("negative-chart", negative, (r) => r.roc_auc);
+    const negSum = document.getElementById("negative-summary");
+    negSum.textContent = negative.length
+      ? negative.length + " runs · latest ROC-AUC " +
+        (negative.slice(-1)[0].roc_auc || 0).toFixed(3) +
+        " · EF1% " + (negative.slice(-1)[0].ef1 || 0).toFixed(2)
+      : "no runs yet.";
+  }
+
+  refresh();
+  setInterval(refresh, 30_000);
+</script>
+
+</body>
+</html>
