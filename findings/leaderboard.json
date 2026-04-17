@@ -1,0 +1,6 @@
+{
+  "candidates": [],
+  "updated_at": null,
+  "top_n": 100,
+  "note": "This leaderboard is populated by src/scoring.py as the agent produces candidates that clear the rigor threshold (default 0.83, configured in targets/mrsa-gyrb.yaml). It starts empty on a fresh deploy; seeing entries here means the agent has validated candidates end-to-end through all 12 verification layers."
+}
