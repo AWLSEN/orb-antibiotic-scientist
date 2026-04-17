@@ -3,12 +3,23 @@ Vercel serverless function — aggregates Orb Cloud state into JSON.
 
 Secrets (set via `vercel env add`):
   ORB_API_KEY        bearer token for api.orbcloud.dev
-  ORB_COMPUTER_ID    UUID of the computer to observe
 
 No per-request secret escapes to the client; the public frontend only
 ever sees the aggregated state object.
 
-Route: GET /api/state   (via vercel.json)
+Response shape:
+  {
+    "timestamp": "<iso>",
+    "usage": { runtime_gb_hours, disk_gb_hours, checkpoint_cycles, ... },
+    "computers": [
+      { id, name, status, runtime_mb, disk_mb, agent_state, agent_pid,
+        findings_candidates, session_started_at, last_event_at }
+    ],
+    "detail": null | { /* full detail for ?computer=<id> */ }
+  }
+
+Route: GET /api/state               → overview (usage + computers summary)
+       GET /api/state?computer=ID   → overview + full detail for that id
 """
 
 from __future__ import annotations
@@ -23,11 +34,11 @@ from http.server import BaseHTTPRequestHandler
 
 ORB_BASE = os.environ.get("ORB_BASE_URL", "https://api.orbcloud.dev").rstrip("/")
 ORB_API_KEY = os.environ.get("ORB_API_KEY", "").strip()
-COMPUTER_ID = os.environ.get("ORB_COMPUTER_ID", "").strip()
 
-# Lightweight in-function TTL cache so repeated polls don't hammer Orb.
-_CACHE: dict = {"t": 0.0, "data": None}
-_CACHE_TTL = 4.0  # seconds
+# Short in-process cache so repeated polls from many clients don't hammer Orb.
+# Separate cache keys for overview vs detail-per-id.
+_CACHE: dict[str, dict] = {}
+_CACHE_TTL = 4.0
 
 
 def _orb_get(path: str, *, text: bool = False, timeout: int = 8):
@@ -42,23 +53,25 @@ def _orb_get(path: str, *, text: bool = False, timeout: int = 8):
     return raw.decode("utf-8", errors="replace") if text else json.loads(raw)
 
 
-def _file_text(path: str) -> str:
+def _file_text(cid: str, path: str) -> str:
     try:
-        return _orb_get(f"/v1/computers/{COMPUTER_ID}/files/{path.lstrip('/')}", text=True)
+        return _orb_get(
+            f"/v1/computers/{cid}/files/{path.lstrip('/')}", text=True
+        )
     except Exception:
         return ""
 
 
-def _file_dir(path: str) -> list[dict]:
+def _file_dir(cid: str, path: str) -> list[dict]:
     try:
-        data = _orb_get(f"/v1/computers/{COMPUTER_ID}/files/{path.lstrip('/')}")
+        data = _orb_get(f"/v1/computers/{cid}/files/{path.lstrip('/')}")
         return data.get("files", []) if isinstance(data, dict) else []
     except Exception:
         return []
 
 
-def _file_json(path: str):
-    raw = _file_text(path)
+def _file_json(cid: str, path: str):
+    raw = _file_text(cid, path)
     if not raw:
         return None
     try:
@@ -67,8 +80,8 @@ def _file_json(path: str):
         return None
 
 
-def _file_jsonl(path: str) -> list:
-    raw = _file_text(path)
+def _file_jsonl(cid: str, path: str) -> list:
+    raw = _file_text(cid, path)
     if not raw:
         return []
     out = []
@@ -83,52 +96,140 @@ def _file_jsonl(path: str) -> list:
     return out
 
 
-LOG_RUN_RE = re.compile(
-    r"\[(?P<ts>[\d\-: ]+)\] \[agent-sdk\] Run complete\. "
-    r"Session: (?P<sid>[\w\-]+), Error: (?P<err>True|False), "
-    r"Turns: (?P<turns>\d+), Cost: \$(?P<cost>[\d.]+)"
-)
 LOG_RUN_START_RE = re.compile(
-    r"\[(?P<ts>[\d\-: ]+)\] \[agent-sdk\] === RUN #(?P<n>\d+) "
+    r"^\[(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[agent-sdk\] === RUN #(?P<n>\d+)"
 )
+LOG_RUN_END_RE = re.compile(
+    r"^\[(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[agent-sdk\] Run complete\. "
+    r"Session: (?P<sid>[\w\-]+), Error: (?P<err>True|False), Turns: (?P<turns>\d+), "
+    r"Cost: \$(?P<cost>[\d.]+)"
+)
+LOG_RESTART_RE = re.compile(
+    r"^\[(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[agent-sdk\] Restarting in "
+)
+LOG_STARTUP_RE = re.compile(
+    r"^\[(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] \[agent-sdk\] "
+    r"orb-antibiotic-scientist -- Claude Agent SDK"
+)
+LOG_TS_RE = re.compile(r"^\[(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]")
 
 
-def _parse_runs(log_text: str, max_runs: int = 80) -> list[dict]:
-    if not log_text:
-        return []
-    lines = log_text.splitlines()
-    runs: list[dict] = []
-    current = None
-    for line in lines:
-        m0 = LOG_RUN_START_RE.match(line)
-        if m0:
-            current = int(m0.group("n"))
-            continue
-        m1 = LOG_RUN_RE.match(line)
-        if m1:
-            runs.append({
-                "run_num": current if current is not None else len(runs) + 1,
-                "timestamp": m1.group("ts"),
-                "session_id": m1.group("sid"),
-                "error": m1.group("err") == "True",
-                "turns": int(m1.group("turns")),
-                "cost_usd": float(m1.group("cost")),
-                "error_message": None,
+def _ts_to_iso(ts: str) -> str:
+    return ts.replace(" ", "T") + "Z"
+
+
+def _parse_log_events(log_text: str) -> list[dict]:
+    """Extract structured events from agent-sdk.log."""
+    events: list[dict] = []
+    for line in log_text.splitlines():
+        m = LOG_RUN_START_RE.match(line)
+        if m:
+            events.append({
+                "kind": "run_start",
+                "ts": _ts_to_iso(m.group("ts")),
+                "run_num": int(m.group("n")),
             })
-    return runs[-max_runs:]
+            continue
+        m = LOG_RUN_END_RE.match(line)
+        if m:
+            events.append({
+                "kind": "run_end",
+                "ts": _ts_to_iso(m.group("ts")),
+                "session_id": m.group("sid"),
+                "error": m.group("err") == "True",
+                "turns": int(m.group("turns")),
+                "cost_usd": float(m.group("cost")),
+            })
+            continue
+        m = LOG_RESTART_RE.match(line)
+        if m:
+            events.append({
+                "kind": "restart",
+                "ts": _ts_to_iso(m.group("ts")),
+            })
+            continue
+        m = LOG_STARTUP_RE.match(line)
+        if m:
+            events.append({
+                "kind": "startup",
+                "ts": _ts_to_iso(m.group("ts")),
+            })
+    return events
 
 
-def _load_candidate_list() -> list[dict]:
-    """Return a chronological list of candidates by scanning
-    findings/candidates/*/candidate.json."""
-    dirs = [
-        f for f in _file_dir("agent/code/findings/candidates")
+def _session_started_at(events: list[dict]) -> str | None:
+    for e in events:
+        if e["kind"] in ("startup", "run_start"):
+            return e["ts"]
+    return None
+
+
+def _last_event_ts(log_text: str) -> str | None:
+    for line in reversed(log_text.splitlines()):
+        m = LOG_TS_RE.match(line)
+        if m:
+            return _ts_to_iso(m.group("ts"))
+    return None
+
+
+def _list_computers() -> list[dict]:
+    try:
+        data = _orb_get("/v1/computers")
+        return data.get("computers", []) if isinstance(data, dict) else []
+    except Exception:
+        return []
+
+
+def _computer_agent_state(cid: str) -> dict:
+    try:
+        data = _orb_get(f"/v1/computers/{cid}/agents")
+        a = (data.get("agents") or [{}])[0] if data.get("agents") else {}
+        return {
+            "state": a.get("state"),
+            "pid": a.get("pid"),
+            "port": a.get("port"),
+        }
+    except Exception:
+        return {"state": None, "pid": None, "port": None}
+
+
+def _candidate_count(cid: str) -> int:
+    items = _file_dir(cid, "agent/code/findings/candidates")
+    return sum(
+        1 for f in items
         if f.get("type") == "directory" and f.get("name") not in (".", "..")
+    )
+
+
+def _summary_for_computer(c: dict) -> dict:
+    cid = c.get("id")
+    agent = _computer_agent_state(cid)
+    log_text = _file_text(cid, "agent/code/logs/agent-sdk.log")
+    events = _parse_log_events(log_text)
+    return {
+        "id": cid,
+        "name": c.get("name"),
+        "status": c.get("status"),
+        "runtime_mb": c.get("runtime_mb"),
+        "disk_mb": c.get("disk_mb"),
+        "agent_state": agent["state"],
+        "agent_pid": agent["pid"],
+        "agent_port": agent["port"],
+        "findings_candidates": _candidate_count(cid),
+        "session_started_at": _session_started_at(events),
+        "last_event_at": _last_event_ts(log_text),
+        "events_count": len(events),
+    }
+
+
+def _load_candidate_list(cid: str, limit: int = 30) -> list[dict]:
+    dirs = [
+        f for f in _file_dir(cid, "agent/code/findings/candidates")
+        if f.get("type") == "directory" and f.get("name") not in (".", "..", ".gitkeep")
     ]
     out: list[dict] = []
-    # Cap at 15 most recently named (candidate id encodes the date)
-    for d in sorted(dirs, key=lambda x: x.get("name", ""), reverse=True)[:15]:
-        meta = _file_json(f"agent/code/findings/candidates/{d['name']}/candidate.json")
+    for d in sorted(dirs, key=lambda x: x.get("name", ""), reverse=True)[:limit]:
+        meta = _file_json(cid, f"agent/code/findings/candidates/{d['name']}/candidate.json")
         if meta:
             out.append({
                 "candidate_id": meta.get("candidate_id") or d["name"],
@@ -141,30 +242,10 @@ def _load_candidate_list() -> list[dict]:
     return out
 
 
-def _aggregate() -> dict:
-    ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    out: dict = {"timestamp": ts, "error": None}
-
-    if not (ORB_API_KEY and COMPUTER_ID):
-        out["error"] = "ORB_API_KEY or ORB_COMPUTER_ID not set on Vercel"
-        return out
-
-    try:
-        out["computer"] = _orb_get(f"/v1/computers/{COMPUTER_ID}")
-    except Exception as exc:
-        out["error"] = f"computer fetch failed: {exc}"
-        out["computer"] = None
-
-    try:
-        out["agents"] = (_orb_get(f"/v1/computers/{COMPUTER_ID}/agents") or {}).get("agents", [])
-    except Exception:
-        out["agents"] = []
-
-    log_text = _file_text("agent/code/logs/agent-sdk.log")
-    out["recent_log"] = "\n".join(log_text.splitlines()[-300:])
-    out["runs"] = _parse_runs(log_text)
-
-    snap = _file_json("agent/code/logs/env-snapshot.json") or {}
+def _detail_for_computer(cid: str) -> dict:
+    log_text = _file_text(cid, "agent/code/logs/agent-sdk.log")
+    events = _parse_log_events(log_text)
+    snap = _file_json(cid, "agent/code/logs/env-snapshot.json") or {}
     env_out = {}
     for k in (
         "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY",
@@ -180,13 +261,11 @@ def _aggregate() -> dict:
             env_out[k] = "<set>" if v not in ("", "<redacted>") else "<MISSING>"
         else:
             env_out[k] = str(v)
-    out["env_snapshot"] = env_out
 
-    # findings counts
     findings = {}
     for name in ("candidates", "docking", "admet", "novelty", "mechanism",
                  "red-team", "retrosynthesis", "weekly-reports"):
-        items = _file_dir(f"agent/code/findings/{name}")
+        items = _file_dir(cid, f"agent/code/findings/{name}")
         if name == "candidates":
             n = sum(1 for f in items if f.get("type") == "directory"
                     and f.get("name") not in (".gitkeep", ".", ".."))
@@ -194,42 +273,87 @@ def _aggregate() -> dict:
             n = sum(1 for f in items if f.get("type") == "file"
                     and f.get("name") != ".gitkeep")
         findings[name.replace("-", "_")] = n
-    out["findings"] = findings
 
-    out["candidates_list"] = _load_candidate_list()
-
-    out["leaderboard"] = _file_json("agent/code/findings/leaderboard.json") or {
-        "candidates": [], "updated_at": None,
+    return {
+        "computer_id": cid,
+        "events": events,
+        "env_snapshot": env_out,
+        "findings": findings,
+        "candidates_list": _load_candidate_list(cid, limit=30),
+        "leaderboard": _file_json(cid, "agent/code/findings/leaderboard.json") or {
+            "candidates": [], "updated_at": None,
+        },
+        "loop_health": {
+            "positive_control": _file_jsonl(cid, "agent/code/findings/loop-health/positive-control.jsonl"),
+            "negative_control": _file_jsonl(cid, "agent/code/findings/loop-health/negative-control.jsonl"),
+            "positive_alert": _file_json(cid, "agent/code/findings/loop-health/positive-control-alert.json"),
+            "negative_alert": _file_json(cid, "agent/code/findings/loop-health/negative-control-alert.json"),
+        },
+        "recent_log": "\n".join(log_text.splitlines()[-250:]),
     }
 
-    pc = _file_jsonl("agent/code/findings/loop-health/positive-control.jsonl")
-    nc = _file_jsonl("agent/code/findings/loop-health/negative-control.jsonl")
-    pa = _file_json("agent/code/findings/loop-health/positive-control-alert.json")
-    na = _file_json("agent/code/findings/loop-health/negative-control-alert.json")
-    out["loop_health"] = {
-        "positive_control": pc, "negative_control": nc,
-        "positive_alert": pa, "negative_alert": na,
-    }
+
+def _usage() -> dict:
+    try:
+        u = _orb_get("/v1/usage")
+        # Rough $ estimate based on typical cloud-compute GB-hour rates.
+        # Orb pricing is not public at this level of granularity, so label
+        # clearly as an estimate. $0.03/GB-hr runtime, $0.001/GB-hr disk.
+        rt_usd = float(u.get("runtime_gb_hours", 0)) * 0.03
+        disk_usd = float(u.get("disk_gb_hours", 0)) * 0.001
+        u["estimated_cost_usd"] = round(rt_usd + disk_usd, 4)
+        u["estimate_note"] = "rough estimate at $0.03/GB-hr runtime + $0.001/GB-hr disk"
+        return u
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def _aggregate(computer_id: str | None) -> dict:
+    ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    out: dict = {"timestamp": ts, "error": None}
+
+    if not ORB_API_KEY:
+        out["error"] = "ORB_API_KEY not set on Vercel"
+        return out
+
+    out["usage"] = _usage()
+
+    computers = _list_computers()
+    out["computers"] = [_summary_for_computer(c) for c in computers]
+
+    if computer_id:
+        # validate it exists in this org
+        if any(c.get("id") == computer_id for c in computers):
+            out["detail"] = _detail_for_computer(computer_id)
+        else:
+            out["detail"] = {"error": f"unknown computer id {computer_id}"}
+    else:
+        out["detail"] = None
 
     return out
 
 
-def _get_cached():
+def _get_cached(cache_key: str, computer_id: str | None) -> dict:
     now = time.time()
-    if _CACHE["data"] is not None and (now - _CACHE["t"]) < _CACHE_TTL:
-        return _CACHE["data"]
+    cached = _CACHE.get(cache_key)
+    if cached and (now - cached["t"]) < _CACHE_TTL:
+        return cached["data"]
     try:
-        data = _aggregate()
+        data = _aggregate(computer_id)
     except Exception as exc:
-        data = {"error": f"aggregate crashed: {exc}", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-    _CACHE["t"] = now
-    _CACHE["data"] = data
+        data = {"error": f"aggregate crashed: {exc}",
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    _CACHE[cache_key] = {"t": now, "data": data}
     return data
 
 
-class handler(BaseHTTPRequestHandler):  # noqa: N801 — Vercel Python runtime looks for class handler
+class handler(BaseHTTPRequestHandler):  # noqa: N801 — Vercel entrypoint
     def do_GET(self):  # noqa: N802
-        body = json.dumps(_get_cached()).encode("utf-8")
+        parsed = urllib.parse.urlparse(self.path)
+        qs = urllib.parse.parse_qs(parsed.query)
+        computer_id = (qs.get("computer") or [None])[0]
+        cache_key = f"computer={computer_id or '_'}"
+        body = json.dumps(_get_cached(cache_key, computer_id)).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Cache-Control", "no-store, max-age=0")
