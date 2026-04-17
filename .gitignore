@@ -39,6 +39,9 @@ dashboard/out/
 *.key
 secrets/
 
+# Orb deploy state
+.orb-state/
+
 # Agent runtime state
 logs/
 *.log

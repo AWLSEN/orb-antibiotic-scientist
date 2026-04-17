@@ -1,0 +1,50 @@
+# Orb Cloud deploy config for orb-antibiotic-scientist.
+# Deployed via scripts/orb_deploy.sh using the API at api.orbcloud.dev.
+
+[agent]
+name  = "orb-antibiotic-scientist"
+lang  = "python"
+entry = "src/agent.py"
+
+[source]
+git    = "https://github.com/nextbysam/orb-antibiotic-scientist"
+branch = "main"
+
+[build]
+# Build steps run in the Orb build container at repo root. They install
+# RDKit + Meeko + the Claude Agent SDK + PyYAML. AutoDock Vina is
+# expected on the runtime image; if absent, `conda install -c bioconda
+# autodock-vina openbabel` at build time would be appropriate, but we
+# prefer thin build steps that rely on the base image.
+steps = [
+    "pip install --upgrade pip",
+    "pip install -r requirements.txt",
+    "pip install anthropic",
+    "mkdir -p data/pdb-cache data/chembl-cache data/dud-e findings/loop-health findings/candidates findings/red-team findings/weekly-reports",
+]
+
+[llm]
+# Claude is the only LLM backend used by the agent (system prompt +
+# red-team critique). The API key arrives as ANTHROPIC_API_KEY at
+# deploy time via org_secrets — NOT hard-coded here.
+base_url = "https://api.anthropic.com"
+model    = "claude-opus-4-7"
+
+[ports]
+# Future dashboard + webhook endpoint. The agent itself doesn't serve
+# HTTP yet, but exposing 8000 makes sure the dashboard's server-side
+# renderer can read findings/ over the Orb file API.
+expose = [8000]
+
+[resources]
+# Docking + RDKit + auto-compacting Claude session needs headroom.
+# Checkpoint-to-NVMe during LLM waits (Orb's sleep/wake) means the
+# effective cost is much lower than the listed runtime.
+runtime = "4GB"
+disk    = "10GB"
+
+[env]
+# Non-secret environment. Secrets are passed via org_secrets at deploy
+# time (see scripts/orb_deploy.sh).
+PYTHONUNBUFFERED = "1"
+ORB_ANTIBIOTIC_TARGET = "targets/mrsa-gyrb.yaml"
