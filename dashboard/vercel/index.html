@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>orb-antibiotic-scientist · live</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg:        hsl(0, 0%, 5%);
+  --surface:   hsl(0, 0%, 8%);
+  --line:      hsl(0, 0%, 16%);
+  --line-2:    hsl(0, 0%, 28%);
+  --fg:        hsl(0, 0%, 94%);
+  --fg-dim:    hsl(0, 0%, 62%);
+  --fg-faint:  hsl(0, 0%, 35%);
+  --awake:     hsl(152, 50%, 72%);    /* alive */
+  --asleep:    hsl(220, 10%, 42%);    /* dormant */
+  --event:     hsl(0, 0%, 94%);       /* checkpoint/wake markers */
+  --err:       hsl(0, 60%, 68%);
+  --font:      'Inter', ui-sans-serif, system-ui, sans-serif;
+  --mono:      'JetBrains Mono', ui-monospace, 'Courier New', monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--bg); color: var(--fg); font-family: var(--font); font-weight: 400; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+body {
+  min-height: 100vh; padding: 3rem 2rem 4rem;
+  display: flex; justify-content: center;
+}
+main { width: 100%; max-width: 920px; }
+
+/* ── Header ─────────────────────────────────────────────── */
+header {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 3.5rem; flex-wrap: wrap; gap: 1rem;
+}
+header .title h1 {
+  font-family: var(--mono); font-size: 1rem; font-weight: 500;
+  letter-spacing: 0.01em; color: var(--fg);
+}
+header .title p {
+  font-size: 0.82rem; color: var(--fg-dim); margin-top: 0.2rem;
+}
+header .clock {
+  font-family: var(--mono); font-size: 0.78rem; color: var(--fg-dim);
+}
+
+/* ── The Agent Orb (the hero) ───────────────────────────── */
+.hero {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center;
+  margin-bottom: 4rem;
+}
+.orb-wrap {
+  position: relative; width: 220px; height: 220px;
+  margin-bottom: 2rem;
+}
+.orb-ring {
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  opacity: 0.4;
+}
+.orb-ring.r2 { inset: -22px; opacity: 0.25; }
+.orb-ring.r3 { inset: -44px; opacity: 0.12; }
+
+.orb {
+  position: absolute; inset: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  background:
+    radial-gradient(circle at 30% 30%,
+      hsl(0,0%,14%) 0%,
+      hsl(0,0%,8%) 40%,
+      hsl(0,0%,5%) 100%);
+  display: flex; align-items: center; justify-content: center;
+  transition: all 800ms ease;
+  overflow: hidden;
+}
+
+/* AWAKE state: brighter center, breathing ring, fast pulse */
+.orb.awake {
+  border-color: var(--awake);
+  background: radial-gradient(circle at 50% 50%,
+    hsla(152, 50%, 72%, 0.15) 0%,
+    hsl(0,0%,8%) 55%,
+    hsl(0,0%,5%) 100%);
+}
+.orb.awake::after {
+  content: ''; position: absolute; inset: 0;
+  border: 1px solid var(--awake);
+  border-radius: 50%;
+  animation: orbPulse 2s ease-in-out infinite;
+}
+@keyframes orbPulse {
+  0%,100% { transform: scale(1);    opacity: 0.8; }
+  50%     { transform: scale(1.08); opacity: 0.1; }
+}
+
+/* ASLEEP state: dimmed, slow breathing */
+.orb.asleep {
+  border-color: var(--asleep);
+}
+.orb.asleep::after {
+  content: ''; position: absolute; inset: 8px;
+  border-radius: 50%;
+  border: 1px solid hsla(220, 10%, 50%, 0.25);
+  animation: breathe 6s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%,100% { transform: scale(0.9); opacity: 0.3; }
+  50%     { transform: scale(1.0); opacity: 0.8; }
+}
+
+/* ERROR state */
+.orb.err { border-color: var(--err); }
+.orb.err::after {
+  content: ''; position: absolute; inset: 0;
+  border: 1px solid var(--err); border-radius: 50%;
+  animation: orbPulse 1.4s ease-in-out infinite;
+}
+
+/* core content */
+.orb-core {
+  position: relative; z-index: 2; text-align: center;
+}
+.orb-state {
+  font-family: var(--mono); font-size: 0.72rem;
+  letter-spacing: 0.3em; text-transform: uppercase;
+  color: var(--fg-dim); margin-bottom: 0.3rem;
+}
+.orb.awake .orb-state { color: var(--awake); }
+.orb.err .orb-state { color: var(--err); }
+.orb-action {
+  font-size: 1rem; color: var(--fg); font-weight: 400;
+  max-width: 140px; line-height: 1.3;
+}
+.orb-sub {
+  font-family: var(--mono); font-size: 0.68rem; color: var(--fg-faint);
+  margin-top: 0.5rem;
+}
+
+/* Orbital particles when awake (subtle) */
+.orb-particle {
+  position: absolute; width: 4px; height: 4px;
+  border-radius: 50%; background: var(--awake);
+  opacity: 0; pointer-events: none;
+}
+.orb.awake .orb-particle {
+  opacity: 0.85;
+  animation: orbit linear infinite;
+}
+.orb.awake .orb-particle:nth-child(1) { animation-duration:  9s; animation-delay: 0s;    }
+.orb.awake .orb-particle:nth-child(2) { animation-duration: 12s; animation-delay: -3s;   }
+.orb.awake .orb-particle:nth-child(3) { animation-duration:  7s; animation-delay: -5s;   }
+@keyframes orbit {
+  0%   { transform: rotate(0deg)   translateX(85px) rotate(0deg); }
+  100% { transform: rotate(360deg) translateX(85px) rotate(-360deg); }
+}
+
+.hero-caption {
+  font-family: var(--mono); font-size: 0.78rem; color: var(--fg-dim);
+  letter-spacing: 0.04em;
+}
+.hero-caption .accent { color: var(--fg); }
+
+/* ── Timeline (checkpoint/wake story) ───────────────────── */
+.section {
+  margin-bottom: 3rem;
+}
+.section-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 1rem;
+}
+.section-label {
+  font-family: var(--mono); font-size: 0.7rem;
+  letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--fg-faint);
+}
+.section-meta {
+  font-family: var(--mono); font-size: 0.72rem; color: var(--fg-dim);
+}
+
+.timeline {
+  position: relative; height: 48px; width: 100%;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+}
+.timeline-bar {
+  position: absolute; top: 14px; height: 20px;
+  border-radius: 1px;
+}
+.timeline-bar.awake { background: var(--awake); opacity: 0.75; }
+.timeline-bar.asleep { background: var(--asleep); opacity: 0.35; }
+.timeline-bar:hover { opacity: 1; }
+
+.timeline-marker {
+  position: absolute; top: 6px; width: 1px; height: 36px;
+  background: var(--event);
+}
+.timeline-marker.checkpoint::before {
+  content: ''; position: absolute; top: 0; left: -3px;
+  width: 7px; height: 7px;
+  background: var(--event); transform: rotate(45deg);
+}
+.timeline-marker.wake::before {
+  content: ''; position: absolute; top: 0; left: -3px;
+  width: 7px; height: 7px;
+  border: 1px solid var(--event); border-radius: 50%;
+  background: var(--bg);
+}
+
+.timeline-axis {
+  display: flex; justify-content: space-between;
+  margin-top: 0.5rem; font-family: var(--mono); font-size: 0.68rem;
+  color: var(--fg-faint);
+}
+
+.timeline-legend {
+  display: flex; gap: 1.6rem; font-family: var(--mono);
+  font-size: 0.72rem; color: var(--fg-dim);
+  margin-top: 1.2rem;
+}
+.timeline-legend .swatch {
+  display: inline-block; width: 12px; height: 10px;
+  margin-right: 0.4rem; vertical-align: middle;
+}
+.timeline-legend .swatch.awake { background: var(--awake); }
+.timeline-legend .swatch.asleep { background: var(--asleep); opacity: 0.5; }
+.timeline-legend .swatch.check { background: var(--event); transform: rotate(45deg); margin-right: 0.6rem; }
+.timeline-legend .swatch.wake {
+  border: 1px solid var(--event); border-radius: 50%; background: transparent;
+}
+
+/* ── Stats row ──────────────────────────────────────────── */
+.stats {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1rem; margin-top: 1.6rem;
+}
+.stat {
+  border: 1px solid var(--line);
+  padding: 1.1rem 1.2rem;
+}
+.stat .n {
+  font-family: var(--mono); font-size: 1.8rem; font-weight: 400;
+  line-height: 1.1; transition: color 300ms;
+}
+.stat .n.pulse { color: var(--awake); }
+.stat .lbl {
+  font-family: var(--mono); font-size: 0.7rem;
+  color: var(--fg-dim); letter-spacing: 0.12em; text-transform: uppercase;
+  margin-top: 0.35rem;
+}
+.stat .sub {
+  font-size: 0.78rem; color: var(--fg-dim); margin-top: 0.5rem;
+}
+
+/* ── Candidates ─────────────────────────────────────────── */
+.candidates {
+  display: flex; flex-direction: column;
+}
+.cand-row {
+  display: grid; grid-template-columns: auto 1fr auto;
+  gap: 1rem; align-items: center;
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono); font-size: 0.82rem;
+}
+.cand-row:last-child { border-bottom: none; }
+.cand-row .n { color: var(--fg-faint); font-size: 0.75rem; }
+.cand-row .id { color: var(--fg); }
+.cand-row .ago { color: var(--fg-dim); font-size: 0.72rem; }
+.cand-empty {
+  padding: 2rem; text-align: center; color: var(--fg-dim);
+  font-family: var(--mono); font-size: 0.82rem;
+  border: 1px dashed var(--line);
+}
+.cand-empty::before {
+  content: ''; display: block; width: 14px; height: 14px;
+  margin: 0 auto 0.8rem;
+  border: 1px solid var(--fg-faint); border-radius: 50%;
+  border-top-color: var(--fg);
+  animation: spin 1.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Footer ─────────────────────────────────────────────── */
+footer {
+  font-family: var(--mono); font-size: 0.72rem;
+  color: var(--fg-dim);
+  padding-top: 2rem; margin-top: 3rem;
+  border-top: 1px solid var(--line);
+  display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem;
+}
+footer a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--fg-dim); }
+footer a:hover { border-bottom-color: var(--fg); }
+footer .disclaimer {
+  max-width: 500px; font-size: 0.7rem; color: var(--fg-faint);
+  line-height: 1.5;
+}
+
+/* ── Mobile ─────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  body { padding: 2rem 1.1rem; }
+  .stats { grid-template-columns: 1fr; }
+  .orb-wrap { width: 180px; height: 180px; }
+}
+</style>
+</head>
+<body>
+
+<main>
+
+  <!-- Header -->
+  <header>
+    <div class="title">
+      <h1>orb-antibiotic-scientist</h1>
+      <p>an autonomous AI scientist designing antibiotics for MRSA · live</p>
+    </div>
+    <div class="clock" id="clock">connecting…</div>
+  </header>
+
+  <!-- HERO: the orb -->
+  <section class="hero">
+    <div class="orb-wrap">
+      <div class="orb-ring r3"></div>
+      <div class="orb-ring r2"></div>
+      <div class="orb-ring"></div>
+      <div class="orb asleep" id="orb">
+        <span class="orb-particle"></span>
+        <span class="orb-particle"></span>
+        <span class="orb-particle"></span>
+        <div class="orb-core">
+          <div class="orb-state" id="orb-state">loading</div>
+          <div class="orb-action" id="orb-action">—</div>
+          <div class="orb-sub" id="orb-sub">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="hero-caption" id="hero-caption">
+      waiting for data…
+    </div>
+  </section>
+
+  <!-- Timeline: checkpoint / wake cycles -->
+  <section class="section">
+    <div class="section-head">
+      <div class="section-label">lifecycle · last hour</div>
+      <div class="section-meta" id="lifecycle-meta">—</div>
+    </div>
+    <div class="timeline" id="timeline"></div>
+    <div class="timeline-axis">
+      <span>60 min ago</span>
+      <span>30 min</span>
+      <span>now</span>
+    </div>
+    <div class="timeline-legend">
+      <span><span class="swatch awake"></span>awake</span>
+      <span><span class="swatch asleep"></span>sleeping</span>
+      <span><span class="swatch check"></span>checkpoint</span>
+      <span><span class="swatch wake"></span>wake</span>
+    </div>
+
+    <div class="stats" id="stats">
+      <div class="stat">
+        <div class="n" id="stat-awake">—</div>
+        <div class="lbl">awake time</div>
+        <div class="sub" id="stat-awake-sub">—</div>
+      </div>
+      <div class="stat">
+        <div class="n" id="stat-asleep">—</div>
+        <div class="lbl">sleeping time</div>
+        <div class="sub" id="stat-asleep-sub">—</div>
+      </div>
+      <div class="stat">
+        <div class="n" id="stat-cycles">—</div>
+        <div class="lbl">checkpoint cycles</div>
+        <div class="sub" id="stat-cycles-sub">—</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- What it made -->
+  <section class="section">
+    <div class="section-head">
+      <div class="section-label">candidates designed</div>
+      <div class="section-meta" id="cand-meta">—</div>
+    </div>
+    <div class="candidates" id="candidates">
+      <div class="cand-empty">waiting for first candidate…</div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div>
+      <a href="https://github.com/nextbysam/orb-antibiotic-scientist" target="_blank" rel="noopener">github</a>
+      &nbsp;·&nbsp;
+      <a href="https://github.com/nextbysam/orb-antibiotic-scientist/blob/main/DISCLAIMER.md" target="_blank" rel="noopener">disclaimer</a>
+      &nbsp;·&nbsp;
+      refreshes every 5 s
+    </div>
+    <div class="disclaimer">
+      candidates shown here are computational hypotheses, not therapies.
+      they have not been synthesised or tested in any biological assay.
+    </div>
+  </footer>
+
+</main>
+
+<script>
+/* ──────────────────────────────────────────────────────────
+   Parse runs from log lines + classify as awake/asleep bands.
+   Agent is:
+     - awake between "RUN #N ===" and "Run complete." lines
+     - asleep between "Restarting in 30s..." and the next "RUN #"
+     - orb checkpointed when it's idle (no new file activity > N sec)
+   For the visual we collapse "Run complete." + "Restarting in 30s…" into a
+   wake→checkpoint transition, and the next "RUN #" into a wake event.
+   ────────────────────────────────────────────────────────── */
+
+const ORB = document.getElementById("orb");
+const ORB_STATE = document.getElementById("orb-state");
+const ORB_ACTION = document.getElementById("orb-action");
+const ORB_SUB = document.getElementById("orb-sub");
+const HERO_CAPTION = document.getElementById("hero-caption");
+const CLOCK = document.getElementById("clock");
+
+function fmtDuration(sec) {
+  sec = Math.max(0, Math.round(sec));
+  if (sec < 60)    return `${sec}s`;
+  if (sec < 3600)  return `${Math.floor(sec/60)}m ${sec%60}s`;
+  return `${Math.floor(sec/3600)}h ${Math.floor((sec%3600)/60)}m`;
+}
+
+function fmtAgo(iso) {
+  if (!iso) return "—";
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 2) return "just now";
+  if (diff < 60) return `${Math.round(diff)}s ago`;
+  if (diff < 3600) return `${Math.round(diff/60)}m ago`;
+  return `${Math.round(diff/3600)}h ago`;
+}
+
+function parseLogEvents(logText) {
+  // returns: [{t: Date, kind: 'run_start'|'run_end'|'checkpoint'|'wake', run_num?, err?}, ...]
+  const events = [];
+  if (!logText) return events;
+  const lines = logText.split("\n");
+  for (const line of lines) {
+    const tsM = line.match(/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]/);
+    if (!tsM) continue;
+    const t = new Date(tsM[1].replace(" ", "T") + "Z");
+    if (isNaN(t.getTime())) continue;
+    const runStart = line.match(/=== RUN #(\d+)/);
+    if (runStart) {
+      events.push({ t, kind: "run_start", run_num: parseInt(runStart[1], 10) });
+      continue;
+    }
+    const runEnd = line.match(/Run complete\. Session: [\w-]+, Error: (True|False), Turns: (\d+), Cost: \$([\d.]+)/);
+    if (runEnd) {
+      events.push({ t, kind: "run_end", err: runEnd[1] === "True", turns: parseInt(runEnd[2], 10), cost: parseFloat(runEnd[3]) });
+      continue;
+    }
+    if (/Restarting in 30s/.test(line)) {
+      events.push({ t, kind: "checkpoint" });
+      continue;
+    }
+    if (/env-snapshot\.json written|forwarding \d+ env vars/.test(line)) {
+      events.push({ t, kind: "wake" });
+      continue;
+    }
+  }
+  return events.sort((a,b) => a.t - b.t);
+}
+
+function buildBands(events, nowMs, windowMs) {
+  // Turn the event sequence into awake/asleep band intervals over
+  // [nowMs - windowMs, nowMs]. Awake = from run_start until the next
+  // Restarting/run_end. Asleep = everything else.
+  const startMs = nowMs - windowMs;
+  const bands = [];
+  let awakeSince = null;
+  let lastCp = null;
+  const cps = [];  // checkpoint markers
+  const wks = [];  // wake markers
+
+  // Only keep events inside window, but start from last-before-window state
+  for (const e of events) {
+    const ms = e.t.getTime();
+    if (e.kind === "run_start") {
+      awakeSince = ms;
+      if (ms >= startMs) wks.push(ms);
+    } else if (e.kind === "wake" && awakeSince === null) {
+      awakeSince = ms;
+      if (ms >= startMs) wks.push(ms);
+    } else if (e.kind === "run_end") {
+      if (awakeSince !== null) {
+        const lo = Math.max(awakeSince, startMs);
+        const hi = Math.min(ms, nowMs);
+        if (hi > lo) bands.push({ from: lo, to: hi, awake: true });
+      }
+      awakeSince = null;
+    } else if (e.kind === "checkpoint") {
+      if (ms >= startMs) cps.push(ms);
+      if (awakeSince !== null) {
+        const lo = Math.max(awakeSince, startMs);
+        const hi = Math.min(ms, nowMs);
+        if (hi > lo) bands.push({ from: lo, to: hi, awake: true });
+      }
+      awakeSince = null;
+      lastCp = ms;
+    }
+  }
+  // trailing awake
+  if (awakeSince !== null) {
+    const lo = Math.max(awakeSince, startMs);
+    const hi = nowMs;
+    if (hi > lo) bands.push({ from: lo, to: hi, awake: true });
+  }
+  // asleep = complement
+  const asleep = [];
+  let cursor = startMs;
+  for (const b of bands) {
+    if (b.from > cursor) asleep.push({ from: cursor, to: b.from, awake: false });
+    cursor = Math.max(cursor, b.to);
+  }
+  if (cursor < nowMs) asleep.push({ from: cursor, to: nowMs, awake: false });
+
+  return { bands: [...bands, ...asleep].sort((a,b) => a.from - b.from), checkpoints: cps, wakes: wks };
+}
+
+function classifyAgentState(state) {
+  const a = (state.agents || [])[0];
+  if (!a) return { label: "STOPPED", cls: "err", detail: "no agent process" };
+  const s = (a.state || "").toLowerCase();
+  if (s === "running") return { label: "AWAKE", cls: "awake", detail: `pid ${a.pid}` };
+  if (s === "checkpointed" || s === "sleeping")
+    return { label: "SLEEPING", cls: "asleep", detail: "checkpointed to NVMe" };
+  if (s === "error")
+    return { label: "ERROR", cls: "err", detail: a.pid ? `pid ${a.pid}` : "restart pending" };
+  return { label: s.toUpperCase(), cls: "asleep", detail: "" };
+}
+
+function classifyAction(state, events, now) {
+  const runs = (state.runs || []);
+  const latest = runs[runs.length - 1];
+  const envOk = (state.env_snapshot || {}).ANTHROPIC_AUTH_TOKEN &&
+                (state.env_snapshot || {}).ANTHROPIC_AUTH_TOKEN !== "<MISSING>";
+  if (!envOk) return { action: "auth not configured", sub: "ANTHROPIC_AUTH_TOKEN missing" };
+
+  if (latest) {
+    if (!latest.error && latest.turns >= 2) {
+      const cnt = (state.findings && state.findings.candidates) || 0;
+      return { action: `designed ${cnt} candidate${cnt===1?'':'s'}`, sub: `last run · ${latest.turns} turns` };
+    }
+    if (latest.error) {
+      const msg = latest.error_message ? latest.error_message.slice(0, 60) : "last run errored";
+      return { action: "recovering", sub: msg };
+    }
+  }
+  return { action: "warming up", sub: "first run pending" };
+}
+
+function fmtCandRow(cand, i, now) {
+  // cand is a candidate dir object from Orb files API (name + maybe designed_at).
+  const tsISO = cand.designed_at || null;
+  return `
+    <div class="cand-row">
+      <div class="n">${String(i + 1).padStart(2, '0')}</div>
+      <div class="id">${cand.candidate_id || cand.name}</div>
+      <div class="ago">${tsISO ? fmtAgo(tsISO) : '—'}</div>
+    </div>`;
+}
+
+let lastData = null;
+let lastFetchMs = null;
+
+function render(state) {
+  lastData = state;
+  lastFetchMs = Date.now();
+
+  if (state.error && !state.agents) {
+    HERO_CAPTION.innerHTML = `<span style="color:var(--err)">proxy error:</span> ${state.error}`;
+    return;
+  }
+
+  // ── Orb state ──
+  const cls = classifyAgentState(state);
+  ORB.className = "orb " + cls.cls;
+  ORB_STATE.textContent = cls.label;
+
+  // what it's doing (descriptive line)
+  const events = parseLogEvents(state.recent_log || "");
+  const act = classifyAction(state, events, Date.now());
+  ORB_ACTION.textContent = act.action;
+  ORB_SUB.textContent = act.sub;
+
+  // hero caption
+  const cand = (state.findings && state.findings.candidates) || 0;
+  HERO_CAPTION.innerHTML = `
+    <span class="accent">${cand}</span> candidate${cand===1?'':'s'} designed so far ·
+    powered by <span class="accent">GLM-4.7 on Orb Cloud</span>
+  `;
+
+  // ── Timeline ──
+  const windowMs = 60 * 60 * 1000;
+  const nowMs = Date.now();
+  const { bands, checkpoints, wakes } = buildBands(events, nowMs, windowMs);
+  const tl = document.getElementById("timeline");
+  tl.innerHTML = "";
+  for (const b of bands) {
+    const left = Math.max(0, ((b.from - (nowMs - windowMs)) / windowMs) * 100);
+    const width = Math.max(0.4, ((b.to - b.from) / windowMs) * 100);
+    const d = document.createElement("div");
+    d.className = "timeline-bar " + (b.awake ? "awake" : "asleep");
+    d.style.left = left + "%"; d.style.width = width + "%";
+    d.title = `${b.awake ? "awake" : "sleeping"} · ${fmtDuration((b.to - b.from)/1000)}`;
+    tl.appendChild(d);
+  }
+  for (const cpMs of checkpoints) {
+    const x = ((cpMs - (nowMs - windowMs)) / windowMs) * 100;
+    if (x < 0 || x > 100) continue;
+    const m = document.createElement("div");
+    m.className = "timeline-marker checkpoint";
+    m.style.left = x + "%";
+    m.title = "checkpoint · " + fmtAgo(new Date(cpMs).toISOString());
+    tl.appendChild(m);
+  }
+  for (const wkMs of wakes) {
+    const x = ((wkMs - (nowMs - windowMs)) / windowMs) * 100;
+    if (x < 0 || x > 100) continue;
+    const m = document.createElement("div");
+    m.className = "timeline-marker wake";
+    m.style.left = x + "%";
+    m.title = "wake · " + fmtAgo(new Date(wkMs).toISOString());
+    tl.appendChild(m);
+  }
+
+  // ── Stats ──
+  let awakeSec = 0, asleepSec = 0;
+  for (const b of bands) {
+    const s = (b.to - b.from) / 1000;
+    if (b.awake) awakeSec += s; else asleepSec += s;
+  }
+  const total = awakeSec + asleepSec;
+  const awakePct = total ? Math.round((awakeSec / total) * 100) : 0;
+  const asleepPct = total ? 100 - awakePct : 0;
+  document.getElementById("stat-awake").textContent = fmtDuration(awakeSec);
+  document.getElementById("stat-asleep").textContent = fmtDuration(asleepSec);
+  document.getElementById("stat-cycles").textContent = checkpoints.length;
+  document.getElementById("stat-awake-sub").textContent = `${awakePct}% of the last hour`;
+  document.getElementById("stat-asleep-sub").textContent = `${asleepPct}% of the last hour · $0 while asleep`;
+  document.getElementById("stat-cycles-sub").textContent =
+    `${wakes.length} wake${wakes.length===1?'':'s'} · avg wake < 1 s`;
+
+  const lc = document.getElementById("lifecycle-meta");
+  lc.textContent = `${awakePct}% awake · ${asleepPct}% sleeping`;
+
+  // ── Candidates ──
+  const canList = (state.candidates_list && state.candidates_list.length)
+    ? state.candidates_list
+    : (state.leaderboard && state.leaderboard.candidates) || [];
+  const meta = document.getElementById("cand-meta");
+  meta.textContent = `${canList.length} total · ${cand} findings`;
+  const candsEl = document.getElementById("candidates");
+  if (!canList.length) {
+    candsEl.innerHTML = `<div class="cand-empty">waiting for first candidate…</div>`;
+  } else {
+    candsEl.innerHTML = canList.slice(0, 8).map((c, i) =>
+      fmtCandRow(c, i, Date.now())
+    ).join("");
+  }
+
+  // ── Clock ──
+  CLOCK.textContent = `updated ${fmtAgo(state.timestamp)}`;
+}
+
+/* Ambient clock updater — ticks even when no new data */
+setInterval(() => {
+  if (!lastData) return;
+  CLOCK.textContent = `updated ${fmtAgo(lastData.timestamp)}`;
+}, 1000);
+
+/* Fetch loop */
+let failStreak = 0;
+async function tick() {
+  try {
+    const r = await fetch("/api/state?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    failStreak = 0;
+    render(j);
+  } catch (e) {
+    failStreak++;
+    CLOCK.textContent = failStreak < 3 ? "reconnecting…" : "offline";
+    if (failStreak === 1) HERO_CAPTION.innerHTML =
+      `<span style="color:var(--err)">temporarily offline</span> — retrying…`;
+  }
+}
+tick();
+setInterval(tick, 5000);
+</script>
+
+</body>
+</html>
