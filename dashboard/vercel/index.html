@@ -3,403 +3,389 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>orb-antibiotic-scientist · fleet</title>
+<title>An AI scientist designing antibiotics · live</title>
+<meta name="description" content="An autonomous AI is designing novel antibiotic candidates for MRSA. It sleeps when idle, wakes up in under a second." />
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap');
 
 :root {
-  --bg:        hsl(0, 0%, 5%);
-  --surface:   hsl(0, 0%, 8%);
-  --surface-2: hsl(0, 0%, 11%);
-  --line:      hsl(0, 0%, 16%);
-  --line-2:    hsl(0, 0%, 28%);
-  --fg:        hsl(0, 0%, 94%);
-  --fg-dim:    hsl(0, 0%, 62%);
-  --fg-faint:  hsl(0, 0%, 35%);
-  --awake:     hsl(152, 50%, 72%);
-  --asleep:    hsl(220, 10%, 42%);
-  --warn:      hsl(38, 75%, 65%);
-  --err:       hsl(0, 60%, 68%);
-  --font:      'Inter', ui-sans-serif, system-ui, sans-serif;
-  --mono:      'JetBrains Mono', ui-monospace, 'Courier New', monospace;
+  --bg:         hsl(40, 15%, 97%);
+  --surface:    hsl(40, 15%, 93%);
+  --surface-2:  hsl(40, 12%, 88%);
+  --line:       hsl(30, 8%, 82%);
+  --line-2:     hsl(30, 8%, 68%);
+  --ink:        hsl(20, 8%, 15%);
+  --ink-soft:   hsl(20, 6%, 38%);
+  --ink-faint:  hsl(20, 4%, 58%);
+
+  --accent:     hsl(24, 64%, 44%);   /* warm terracotta — "awake" */
+  --moon:       hsl(220, 12%, 55%);  /* muted slate — "asleep" */
+  --warn:       hsl(32, 80%, 50%);
+  --err:        hsl(0,  55%, 48%);
+
+  --radius:     2px;
+  --sans:       'Lato', ui-sans-serif, system-ui, sans-serif;
+  --serif:      'Lora', Georgia, serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { background: var(--bg); color: var(--fg); font-family: var(--font); line-height: 1.5; -webkit-font-smoothing: antialiased; }
-
+html, body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--sans); line-height: 1.6;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 body {
-  min-height: 100vh; padding: 2.5rem 2rem 3rem;
+  min-height: 100vh; padding: 3rem 1.6rem 4rem;
   display: flex; justify-content: center;
 }
-main { width: 100%; max-width: 1100px; }
+main { width: 100%; max-width: 960px; }
 
 /* ── Header ─────────────────────────────────────────────── */
 header {
-  display: flex; justify-content: space-between; align-items: baseline;
-  margin-bottom: 2.5rem; flex-wrap: wrap; gap: 1rem;
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 3.5rem; flex-wrap: wrap; gap: 1rem;
 }
-.title h1 {
-  font-family: var(--mono); font-size: 1rem; font-weight: 500;
-  color: var(--fg);
+.brand .h {
+  font-family: var(--serif); font-size: 1.35rem; font-weight: 500;
+  color: var(--ink); letter-spacing: -0.01em;
 }
-.title p {
-  font-size: 0.82rem; color: var(--fg-dim); margin-top: 0.2rem;
+.brand .sub {
+  font-size: 0.86rem; color: var(--ink-soft); margin-top: 0.1rem;
 }
-header .right {
-  display: flex; gap: 1.5rem; align-items: baseline;
-  font-family: var(--mono); font-size: 0.78rem; color: var(--fg-dim);
-}
-.refresh-dot {
-  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
-  background: var(--awake); margin-right: 6px;
-  animation: blink 2s ease-in-out infinite;
-}
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
-.refresh-dot.err { background: var(--err); }
-
-/* ── Top stats strip (cost / usage) ─────────────────────── */
-.usage-strip {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0; margin-bottom: 2.5rem;
+header .live {
+  display: flex; gap: 0.5rem; align-items: center;
+  font-size: 0.82rem; color: var(--ink-soft);
+  padding: 0.35rem 0.8rem;
   border: 1px solid var(--line);
+  border-radius: 100px;
+  background: var(--surface);
 }
-.usage-stat {
-  padding: 1.1rem 1.4rem;
-  border-right: 1px solid var(--line);
+.live-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 6px var(--accent);
+  animation: livepulse 2s ease-in-out infinite;
 }
-.usage-stat:last-child { border-right: none; }
-.usage-stat .n {
-  font-family: var(--mono); font-size: 1.45rem; font-weight: 400;
-  line-height: 1.1; transition: color 300ms;
-}
-.usage-stat .n.pulse { color: var(--awake); }
-.usage-stat .lbl {
-  font-family: var(--mono); font-size: 0.68rem;
-  letter-spacing: 0.14em; text-transform: uppercase;
-  color: var(--fg-dim); margin-top: 0.35rem;
-}
-.usage-stat .sub {
-  font-size: 0.74rem; color: var(--fg-faint);
-  font-family: var(--mono); margin-top: 0.4rem;
+.live-dot.idle { background: var(--moon); box-shadow: 0 0 6px var(--moon); }
+.live-dot.off { background: var(--ink-faint); box-shadow: none; animation: none; }
+@keyframes livepulse {
+  0%, 100% { opacity: 1; } 50% { opacity: 0.35; }
 }
 
-/* ── Section heads ──────────────────────────────────────── */
-.section-head {
-  display: flex; justify-content: space-between; align-items: baseline;
+/* ── Hero statement ─────────────────────────────────────── */
+.hero {
+  margin-bottom: 3.5rem;
+}
+.hero h1 {
+  font-family: var(--serif); font-weight: 500;
+  font-size: clamp(1.9rem, 4.5vw, 2.75rem);
+  line-height: 1.2; letter-spacing: -0.015em;
+  color: var(--ink); max-width: 720px;
   margin-bottom: 1rem;
 }
-.section-label {
-  font-family: var(--mono); font-size: 0.68rem;
-  letter-spacing: 0.2em; text-transform: uppercase;
-  color: var(--fg-faint);
+.hero h1 em {
+  font-style: italic; color: var(--accent); font-weight: 500;
 }
-.section-meta {
-  font-family: var(--mono); font-size: 0.72rem; color: var(--fg-dim);
+.hero .lede {
+  font-size: 1.05rem; color: var(--ink-soft);
+  max-width: 620px; line-height: 1.6;
 }
 
-/* ── Fleet grid ─────────────────────────────────────────── */
-.fleet {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 1rem;
-  margin-bottom: 3rem;
-}
-.fleet-card {
+/* ── What's it doing now (the centerpiece) ─────────────── */
+.now-card {
   border: 1px solid var(--line);
-  padding: 1.5rem 1.6rem 1.6rem;
-  cursor: pointer;
-  transition: all 180ms;
-  position: relative;
-  display: flex; flex-direction: column; gap: 1rem;
-  background: transparent;
-}
-.fleet-card:hover {
-  border-color: var(--line-2);
   background: var(--surface);
-  transform: translateY(-1px);
+  padding: 2.2rem 2.4rem;
+  border-radius: var(--radius);
+  margin-bottom: 3rem;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2rem;
+  align-items: center;
+  position: relative; overflow: hidden;
 }
-.fleet-card .card-head {
-  display: flex; justify-content: space-between; align-items: flex-start;
-  gap: 1rem;
-}
-.fleet-card .card-title {
-  font-family: var(--mono); font-size: 0.85rem;
-  color: var(--fg); font-weight: 500;
-  word-break: break-word;
-}
-.fleet-card .card-id {
-  font-family: var(--mono); font-size: 0.68rem;
-  color: var(--fg-faint); margin-top: 0.2rem;
+@media (max-width: 600px) {
+  .now-card { grid-template-columns: 1fr; text-align: center; padding: 1.8rem 1.4rem; gap: 1.4rem; }
 }
 
-/* mini orb pulsing on each card */
-.mini-orb-wrap {
-  position: relative; width: 40px; height: 40px; flex-shrink: 0;
+/* the orb — less aggressive than before */
+.now-orb {
+  width: 140px; height: 140px; position: relative;
+  flex-shrink: 0;
 }
-.mini-orb {
-  position: absolute; inset: 0;
+@media (max-width: 600px) { .now-orb { margin: 0 auto; } }
+.now-orb .core {
+  position: absolute; inset: 14px;
   border-radius: 50%;
-  border: 1px solid var(--line-2);
   background: radial-gradient(circle at 30% 30%,
-    hsl(0,0%,14%) 0%, hsl(0,0%,8%) 50%, hsl(0,0%,5%) 100%);
+    hsl(40, 18%, 95%) 0%,
+    hsl(40, 15%, 88%) 60%,
+    hsl(40, 12%, 82%) 100%);
+  border: 1px solid var(--line-2);
 }
-.mini-orb.awake { border-color: var(--awake); }
-.mini-orb.awake::after {
-  content: ''; position: absolute; inset: 0;
-  border: 1px solid var(--awake); border-radius: 50%;
-  animation: mOrbPulse 2s ease-in-out infinite;
+.now-orb .ring {
+  position: absolute; inset: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  opacity: 0.5;
 }
-@keyframes mOrbPulse {
-  0%,100%{transform:scale(1);opacity:0.8}
-  50%{transform:scale(1.2);opacity:0.1}
+.now-orb[data-state="awake"] .core {
+  background: radial-gradient(circle at 30% 30%,
+    hsl(40, 50%, 92%) 0%,
+    hsl(30, 45%, 85%) 55%,
+    hsl(24, 60%, 76%) 100%);
+  border-color: var(--accent);
 }
-.mini-orb.dumping {
+.now-orb[data-state="awake"] .ring {
+  border-color: var(--accent);
+  animation: wakeHalo 2.8s ease-in-out infinite;
+}
+@keyframes wakeHalo {
+  0%, 100% { transform: scale(1); opacity: 0.35; }
+  50% { transform: scale(1.08); opacity: 0.05; }
+}
+.now-orb[data-state="asleep"] .core {
+  background: radial-gradient(circle at 35% 35%,
+    hsl(220, 12%, 82%) 0%,
+    hsl(220, 10%, 76%) 100%);
+  border-color: var(--moon);
+}
+.now-orb[data-state="asleep"] .ring {
+  border-color: var(--moon);
+  animation: sleepBreath 5s ease-in-out infinite;
+}
+@keyframes sleepBreath {
+  0%, 100% { transform: scale(0.94); opacity: 0.25; }
+  50%      { transform: scale(1);    opacity: 0.55; }
+}
+.now-orb[data-state="waking"] .core,
+.now-orb[data-state="checkpointing"] .core {
+  background: radial-gradient(circle at 30% 30%, hsl(32, 70%, 88%), hsl(32, 60%, 78%));
   border-color: var(--warn);
-  background: radial-gradient(circle, hsla(38,75%,65%,0.1), hsl(0,0%,5%));
 }
-.mini-orb.dumping::after {
-  content: ''; position: absolute; inset: 0;
-  border: 1px dashed var(--warn); border-radius: 50%;
+.now-orb[data-state="waking"] .ring,
+.now-orb[data-state="checkpointing"] .ring {
+  border-color: var(--warn);
+  border-style: dashed;
   animation: spin 2s linear infinite;
 }
-.mini-orb.asleep::after {
-  content: ''; position: absolute; inset: 8px;
-  border: 1px solid hsla(220,10%,50%,0.3); border-radius: 50%;
-  animation: breathe 5s ease-in-out infinite;
+.now-orb[data-state="err"] .core {
+  background: radial-gradient(circle, hsl(0, 40%, 92%), hsl(0, 40%, 85%));
+  border-color: var(--err);
 }
-.mini-orb.err { border-color: var(--err); }
-.mini-orb.err::after {
-  content: ''; position: absolute; inset: 0;
-  border: 1px solid var(--err); border-radius: 50%;
-  animation: mOrbPulse 1.2s ease-in-out infinite;
-}
-@keyframes breathe { 0%,100%{transform:scale(.85);opacity:.3} 50%{transform:scale(1);opacity:.9} }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.card-row {
-  display: flex; justify-content: space-between; align-items: baseline;
-  padding: 0.4rem 0;
-  border-top: 1px solid var(--line);
-  font-family: var(--mono); font-size: 0.78rem;
+.now-copy .state-label {
+  font-size: 0.74rem; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--ink-faint);
+  font-weight: 700;
+  margin-bottom: 0.5rem;
 }
-.card-row:first-of-type { border-top: none; }
-.card-row .k { color: var(--fg-dim); font-size: 0.72rem; }
-.card-row .v { color: var(--fg); }
-.card-row .v.state-awake { color: var(--awake); }
-.card-row .v.state-asleep { color: var(--asleep); }
-.card-row .v.state-warn { color: var(--warn); }
-.card-row .v.state-err { color: var(--err); }
+.now-copy .headline {
+  font-family: var(--serif); font-weight: 500;
+  font-size: clamp(1.25rem, 3vw, 1.6rem);
+  line-height: 1.3; color: var(--ink);
+  margin-bottom: 0.8rem;
+}
+.now-copy .headline em { color: var(--accent); font-style: normal; }
+.now-copy .desc {
+  font-size: 0.94rem; color: var(--ink-soft);
+  max-width: 540px;
+}
 
-.fleet-card .card-cta {
-  font-family: var(--mono); font-size: 0.68rem;
-  color: var(--fg-faint); letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin-top: 0.4rem;
+/* ── The story of sleep/wake ────────────────────────────── */
+.story-section { margin-bottom: 3rem; }
+.story-section .eyebrow {
+  font-size: 0.72rem; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--ink-faint);
+  font-weight: 700; margin-bottom: 0.8rem;
 }
-.fleet-card:hover .card-cta { color: var(--fg-dim); }
+.story-section h2 {
+  font-family: var(--serif); font-weight: 500;
+  font-size: 1.5rem; line-height: 1.3;
+  max-width: 640px; margin-bottom: 0.6rem;
+}
+.story-section .blurb {
+  font-size: 0.95rem; color: var(--ink-soft);
+  max-width: 640px; margin-bottom: 1.5rem;
+}
 
-/* ── Detail overlay (slides in on click) ────────────────── */
-.detail-backdrop {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,0.7);
-  backdrop-filter: blur(4px);
-  display: none; z-index: 50;
-  opacity: 0; transition: opacity 200ms;
-}
-.detail-backdrop.open { display: block; opacity: 1; }
-
-.detail-panel {
-  position: fixed; top: 0; right: 0; bottom: 0;
-  width: min(900px, 95vw);
-  background: var(--bg);
-  border-left: 1px solid var(--line);
-  z-index: 51;
-  overflow-y: auto;
-  transform: translateX(100%);
-  transition: transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.detail-backdrop.open .detail-panel { transform: translateX(0); }
-.detail-panel-inner { padding: 2.5rem 2.5rem 3rem; }
-
-.detail-close {
-  position: absolute; top: 1.2rem; right: 1.2rem;
-  background: transparent; border: 1px solid var(--line);
-  color: var(--fg-dim); font-family: var(--mono);
-  font-size: 0.75rem; padding: 0.35rem 0.7rem;
-  cursor: pointer; letter-spacing: 0.05em;
-  transition: all 150ms;
-}
-.detail-close:hover { border-color: var(--line-2); color: var(--fg); }
-
-.detail-hero {
-  display: flex; gap: 1.6rem; align-items: center;
-  padding-bottom: 1.5rem; border-bottom: 1px solid var(--line);
-  margin-bottom: 2rem;
-}
-.big-orb-wrap { width: 96px; height: 96px; flex-shrink: 0; position: relative; }
-.big-orb { position: absolute; inset: 0; border-radius: 50%;
-  border: 1px solid var(--line-2);
-  background: radial-gradient(circle at 30% 30%,
-    hsl(0,0%,16%) 0%, hsl(0,0%,8%) 55%, hsl(0,0%,5%) 100%);
-}
-.big-orb.awake { border-color: var(--awake); }
-.big-orb.awake::after {
-  content:''; position: absolute; inset: 0;
-  border: 1px solid var(--awake); border-radius: 50%;
-  animation: mOrbPulse 2.2s ease-in-out infinite;
-}
-.big-orb.dumping { border-color: var(--warn); }
-.big-orb.dumping::after {
-  content:''; position: absolute; inset: 0;
-  border: 1px dashed var(--warn); border-radius: 50%;
-  animation: spin 2s linear infinite;
-}
-.big-orb.asleep::after {
-  content:''; position: absolute; inset: 12px;
-  border: 1px solid hsla(220,10%,50%,0.3); border-radius: 50%;
-  animation: breathe 6s ease-in-out infinite;
-}
-.big-orb.err { border-color: var(--err); }
-.detail-hero .meta .name {
-  font-family: var(--mono); font-size: 1.1rem; color: var(--fg);
-}
-.detail-hero .meta .id {
-  font-family: var(--mono); font-size: 0.72rem; color: var(--fg-faint);
-  margin-top: 0.2rem;
-}
-.detail-hero .meta .desc {
-  font-size: 0.82rem; color: var(--fg-dim); margin-top: 0.5rem;
-}
-.detail-hero .meta .state-pill {
-  display: inline-block;
-  font-family: var(--mono); font-size: 0.68rem;
-  letter-spacing: 0.15em; text-transform: uppercase;
-  padding: 0.25rem 0.55rem; border: 1px solid var(--line-2);
-  margin-top: 0.5rem; color: var(--fg-dim);
-}
-.state-pill.awake { border-color: var(--awake); color: var(--awake); }
-.state-pill.dumping { border-color: var(--warn); color: var(--warn); }
-.state-pill.asleep { color: var(--fg-dim); }
-.state-pill.err { border-color: var(--err); color: var(--err); }
-
-/* Timeline */
-.timeline-block { margin-bottom: 2.5rem; }
-.timeline {
-  position: relative; height: 48px; width: 100%;
-  border-left: 1px solid var(--line);
-  border-right: 1px solid var(--line);
-  background: transparent;
-}
-.timeline-bar {
-  position: absolute; top: 14px; height: 20px;
-  border-radius: 1px;
-}
-.timeline-bar.awake { background: var(--awake); opacity: 0.75; }
-.timeline-bar.asleep { background: var(--asleep); opacity: 0.28; }
-.timeline-bar.dumping { background: var(--warn); opacity: 0.6; }
-.timeline-bar:hover { opacity: 1; }
-.timeline-marker {
-  position: absolute; top: 6px; width: 1px; height: 36px;
-  background: var(--fg);
-}
-.timeline-marker.checkpoint::before {
-  content: ''; position: absolute; top: 0; left: -3px;
-  width: 7px; height: 7px; background: var(--fg);
-  transform: rotate(45deg);
-}
-.timeline-marker.wake::before {
-  content: ''; position: absolute; top: 0; left: -3px;
-  width: 7px; height: 7px;
-  border: 1px solid var(--fg); border-radius: 50%;
-  background: var(--bg);
-}
-.timeline-axis {
-  display: flex; justify-content: space-between;
-  margin-top: 0.5rem; font-family: var(--mono); font-size: 0.68rem;
-  color: var(--fg-faint);
-}
-.timeline-legend {
-  display: flex; gap: 1.4rem; flex-wrap: wrap;
-  font-family: var(--mono); font-size: 0.7rem; color: var(--fg-dim);
-  margin-top: 1.2rem;
-}
-.timeline-legend .sw { display: inline-block; width: 12px; height: 10px; vertical-align: middle; margin-right: 0.35rem; }
-.timeline-legend .sw.awake { background: var(--awake); }
-.timeline-legend .sw.asleep { background: var(--asleep); opacity: 0.5; }
-.timeline-legend .sw.check { background: var(--fg); transform: rotate(45deg); margin-right: 0.6rem; }
-.timeline-legend .sw.wake { border: 1px solid var(--fg); border-radius: 50%; background: transparent; }
-
-.stat-row {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 1rem; margin-top: 1.5rem;
-}
-.stat-row .stat {
+/* Sleep/wake timeline — legible */
+.sw-timeline {
+  display: flex; height: 44px;
   border: 1px solid var(--line);
-  padding: 1rem 1.1rem;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+  position: relative;
 }
-.stat-row .stat .n {
-  font-family: var(--mono); font-size: 1.35rem;
+.sw-block {
+  height: 100%; position: relative;
+  transition: background 300ms;
 }
-.stat-row .stat .lbl {
-  font-family: var(--mono); font-size: 0.65rem;
-  letter-spacing: 0.12em; text-transform: uppercase;
-  color: var(--fg-dim); margin-top: 0.3rem;
+.sw-block.awake { background: var(--accent); }
+.sw-block.asleep {
+  background: repeating-linear-gradient(
+    45deg,
+    hsl(220, 10%, 85%) 0px,
+    hsl(220, 10%, 85%) 6px,
+    hsl(220, 10%, 80%) 6px,
+    hsl(220, 10%, 80%) 12px
+  );
 }
-.stat-row .stat .sub {
-  font-size: 0.72rem; color: var(--fg-faint);
-  font-family: var(--mono); margin-top: 0.35rem;
+.sw-block.now {
+  background: var(--moon);
+  animation: now-pulse 1.6s ease-in-out infinite;
+}
+@keyframes now-pulse {
+  0%, 100% { opacity: 0.7; } 50% { opacity: 1; }
+}
+.sw-timeline-legend {
+  display: flex; gap: 1.4rem;
+  font-size: 0.82rem; color: var(--ink-soft);
+  margin-top: 0.9rem;
+}
+.sw-timeline-legend .sw {
+  display: inline-block; width: 14px; height: 10px;
+  vertical-align: middle; margin-right: 0.4rem;
+}
+.sw-timeline-legend .sw.awake { background: var(--accent); }
+.sw-timeline-legend .sw.asleep {
+  background: repeating-linear-gradient(
+    45deg, hsl(220, 10%, 85%) 0px, hsl(220, 10%, 85%) 3px,
+    hsl(220, 10%, 80%) 3px, hsl(220, 10%, 80%) 6px);
+}
+.sw-summary {
+  margin-top: 1.2rem; display: flex; gap: 2rem;
+  flex-wrap: wrap;
+  font-size: 0.92rem; color: var(--ink-soft);
+}
+.sw-summary strong {
+  font-family: var(--serif); font-weight: 600; color: var(--ink);
+  font-size: 1.05rem;
 }
 
-/* Candidates list */
-.candidates { display: flex; flex-direction: column; }
-.cand-row {
-  display: grid; grid-template-columns: 32px 1fr auto;
+/* ── Stats cards (work done) ────────────────────────────── */
+.stats-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+@media (max-width: 720px) {
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  .stats-grid .stat:last-child { grid-column: span 2; }
+}
+.stat {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  padding: 1.4rem 1.5rem 1.5rem;
+  border-radius: var(--radius);
+}
+.stat .eye {
+  font-size: 0.68rem; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 700;
+  margin-bottom: 0.8rem;
+}
+.stat .v {
+  font-family: var(--serif); font-weight: 500;
+  font-size: 2.2rem; line-height: 1.1;
+  color: var(--ink); letter-spacing: -0.015em;
+  transition: color 300ms;
+}
+.stat .v.pulse { color: var(--accent); }
+.stat .unit {
+  font-family: var(--sans); font-size: 0.9rem;
+  color: var(--ink-soft); margin-left: 0.3rem; font-weight: 400;
+}
+.stat .sub {
+  font-size: 0.85rem; color: var(--ink-soft); margin-top: 0.6rem;
+}
+
+/* ── Candidates list (rebranded "recent molecules") ─────── */
+.molecules-list {
+  display: flex; flex-direction: column;
+}
+.mol-row {
+  display: grid; grid-template-columns: 28px 1fr auto;
   gap: 1rem; align-items: start;
-  padding: 0.85rem 0;
+  padding: 1rem 0;
   border-bottom: 1px solid var(--line);
 }
-.cand-row:last-child { border-bottom: none; }
-.cand-n { font-family: var(--mono); font-size: 0.72rem; color: var(--fg-faint); padding-top: 2px; }
-.cand-body { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
-.cand-id { font-family: var(--mono); font-size: 0.8rem; color: var(--fg); }
-.cand-name { font-size: 0.82rem; color: var(--fg-dim); }
-.cand-smi {
-  font-family: var(--mono); font-size: 0.72rem; color: var(--fg-faint);
+.mol-row:last-child { border-bottom: none; }
+.mol-n {
+  font-family: var(--serif); font-size: 0.9rem;
+  color: var(--ink-faint); padding-top: 2px; font-weight: 400;
+}
+.mol-body { min-width: 0; }
+.mol-name {
+  font-family: var(--serif); font-weight: 500;
+  font-size: 1rem; color: var(--ink); line-height: 1.3;
+  margin-bottom: 0.2rem;
+}
+.mol-id {
+  font-size: 0.78rem; color: var(--ink-soft);
+  margin-bottom: 0.3rem;
+}
+.mol-smi {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.78rem;
+  color: var(--ink-faint);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%;
 }
-.cand-ago { font-family: var(--mono); font-size: 0.72rem; color: var(--fg-dim); white-space: nowrap; padding-top: 2px; }
+.mol-ago {
+  font-size: 0.82rem; color: var(--ink-soft);
+  white-space: nowrap; padding-top: 4px;
+}
 
-.empty {
-  padding: 2rem; text-align: center; color: var(--fg-dim);
-  font-family: var(--mono); font-size: 0.82rem;
+.empty-mols {
+  padding: 2rem 1rem; text-align: center;
+  font-size: 0.9rem; color: var(--ink-soft);
   border: 1px dashed var(--line);
+  border-radius: var(--radius);
 }
-.empty.spinner::before {
-  content:''; display: block; width: 14px; height: 14px;
+.empty-mols::before {
+  content: ''; display: block; width: 16px; height: 16px;
   margin: 0 auto 0.8rem;
-  border: 1px solid var(--fg-faint); border-top-color: var(--fg);
-  border-radius: 50%; animation: spin 1.6s linear infinite;
+  border: 1.5px solid var(--line-2); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 1.8s linear infinite;
 }
 
-/* Footer */
+/* ── Explainer strip ────────────────────────────────────── */
+.explain {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.6rem 1.8rem;
+  background: var(--surface);
+  margin-bottom: 3rem;
+}
+.explain h3 {
+  font-family: var(--serif); font-weight: 500;
+  font-size: 1.15rem; margin-bottom: 0.7rem;
+}
+.explain p {
+  font-size: 0.93rem; color: var(--ink-soft); margin-bottom: 0.6rem;
+  max-width: 640px;
+}
+.explain p:last-child { margin-bottom: 0; }
+.explain strong { color: var(--ink); font-weight: 700; }
+
+/* ── Footer ─────────────────────────────────────────────── */
 footer {
-  font-family: var(--mono); font-size: 0.72rem;
-  color: var(--fg-dim); padding-top: 2rem; margin-top: 3rem;
+  margin-top: 4rem; padding-top: 1.6rem;
   border-top: 1px solid var(--line);
+  font-size: 0.82rem; color: var(--ink-soft);
   display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem;
 }
-footer a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--fg-dim); }
-footer a:hover { border-bottom-color: var(--fg); }
-.disclaimer { max-width: 520px; font-size: 0.7rem; color: var(--fg-faint); line-height: 1.5; }
+footer a { color: var(--ink); text-decoration: none; border-bottom: 1px dotted var(--ink-faint); }
+footer a:hover { border-bottom-color: var(--accent); }
+footer .right { font-size: 0.76rem; color: var(--ink-faint); max-width: 440px; text-align: right; }
 
-@media (max-width: 640px) {
+/* ── Responsive polish ──────────────────────────────────── */
+@media (max-width: 520px) {
   body { padding: 2rem 1rem; }
-  .usage-strip { grid-template-columns: 1fr 1fr; }
-  .usage-stat:nth-child(2) { border-right: none; }
-  .usage-stat:nth-child(1), .usage-stat:nth-child(2) { border-bottom: 1px solid var(--line); }
-  .stat-row { grid-template-columns: 1fr; }
-  .detail-panel-inner { padding: 1.5rem 1.2rem 2rem; }
+  .hero h1 { font-size: 1.7rem; }
+  .now-card { padding: 1.6rem 1.2rem; }
 }
 </style>
 </head>
@@ -407,402 +393,445 @@ footer a:hover { border-bottom-color: var(--fg); }
 
 <main>
 
+  <!-- HEADER -->
   <header>
-    <div class="title">
-      <h1>orb-antibiotic-scientist</h1>
-      <p>autonomous AI scientists designing antibiotic candidates for MRSA · live on Orb Cloud</p>
+    <div class="brand">
+      <div class="h">The Antibiotic Scientist</div>
+      <div class="sub">an AI running on cloud, designing new medicine</div>
     </div>
-    <div class="right">
-      <span><span class="refresh-dot" id="rdot"></span><span id="refresh-label">live</span></span>
-      <span id="clock">—</span>
+    <div class="live" id="live-tag">
+      <span class="live-dot" id="live-dot"></span>
+      <span id="live-label">connecting…</span>
     </div>
   </header>
 
-  <!-- Usage strip -->
-  <section class="usage-strip" id="usage-strip">
-    <div class="usage-stat"><div class="n" id="u-cand">—</div><div class="lbl">candidates designed</div><div class="sub">across all agents</div></div>
-    <div class="usage-stat"><div class="n" id="u-cycles">—</div><div class="lbl">checkpoint cycles</div><div class="sub">Orb sleep/wake events</div></div>
-    <div class="usage-stat"><div class="n" id="u-gbh">—</div><div class="lbl">runtime · disk</div><div class="sub" id="u-gbh-sub">GB-hours consumed</div></div>
-    <div class="usage-stat"><div class="n" id="u-cost">—</div><div class="lbl">estimated cost</div><div class="sub" id="u-cost-sub">since billing period start</div></div>
+  <!-- HERO STATEMENT -->
+  <section class="hero">
+    <h1>An AI scientist, running on cloud, designing <em>new medicine</em> for a drug-resistant infection.</h1>
+    <p class="lede">
+      Methicillin-resistant staph (MRSA) kills over a million people a year, and most big drug companies stopped making new antibiotics. This is an autonomous AI chemist trying to help — proposing new molecules, testing them computationally, and saving the ones that might work.
+    </p>
   </section>
 
-  <!-- Fleet grid -->
-  <section>
-    <div class="section-head">
-      <div class="section-label">agents · click to drill in</div>
-      <div class="section-meta" id="fleet-meta">—</div>
+  <!-- LIVE NOW CARD -->
+  <section class="now-card">
+    <div class="now-orb" id="now-orb" data-state="asleep">
+      <div class="ring"></div>
+      <div class="core"></div>
     </div>
-    <div class="fleet" id="fleet">
-      <div class="empty spinner">discovering agents…</div>
+    <div class="now-copy">
+      <div class="state-label" id="state-label">loading…</div>
+      <div class="headline" id="headline">—</div>
+      <div class="desc" id="desc">Reading live data from the agent’s cloud computer…</div>
     </div>
   </section>
 
+  <!-- HOW IT WORKS -->
+  <section class="story-section">
+    <div class="eyebrow">how it works</div>
+    <h2>It sleeps when it's not working. Wakes up instantly when it is.</h2>
+    <p class="blurb">
+      Like an app minimised on your phone, the agent is parked to disk when it has nothing to do — no memory used, no bill running. When a new task arrives, it's restored in under a second. This is how it runs 24/7 at the cost of a few cents a day.
+    </p>
+
+    <!-- Live sleep/wake timeline (last 60 min) -->
+    <div class="sw-timeline" id="sw-timeline">
+      <div class="sw-block asleep" style="flex: 1;"></div>
+    </div>
+    <div class="sw-timeline-legend">
+      <span><span class="sw awake"></span>working</span>
+      <span><span class="sw asleep"></span>sleeping (paused on disk)</span>
+      <span id="sw-window" style="color: var(--ink-faint)">last hour</span>
+    </div>
+
+    <div class="sw-summary">
+      <div><strong id="sw-work">—</strong> spent working</div>
+      <div><strong id="sw-sleep">—</strong> spent sleeping</div>
+      <div><strong id="sw-wakes">—</strong> sleep/wake cycles</div>
+    </div>
+  </section>
+
+  <!-- WORK DONE -->
+  <section class="story-section">
+    <div class="eyebrow">what it's made so far</div>
+    <h2>Novel drug candidates, each checked by twelve independent tests.</h2>
+    <p class="blurb">
+      Every molecule has to pass a chemistry sanity check, a physics-based binding simulation, a toxicity screen, a novelty check against all known drugs, and a final adversarial review. Only candidates that clear all twelve get published.
+    </p>
+
+    <div class="stats-grid">
+      <div class="stat">
+        <div class="eye">molecules designed</div>
+        <div class="v" id="s-cand">—</div>
+        <div class="sub" id="s-cand-sub">total across the agent's life</div>
+      </div>
+      <div class="stat">
+        <div class="eye">time spent working</div>
+        <div class="v" id="s-time">—<span class="unit" id="s-time-unit"></span></div>
+        <div class="sub" id="s-time-sub">since this run started</div>
+      </div>
+      <div class="stat">
+        <div class="eye">cost so far</div>
+        <div class="v" id="s-cost">—</div>
+        <div class="sub" id="s-cost-sub">≈ rough estimate of cloud bill</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RECENT MOLECULES -->
+  <section class="story-section">
+    <div class="eyebrow">recent molecules</div>
+    <h2>Latest candidates the agent has drafted.</h2>
+    <p class="blurb">
+      Each line is a new molecular design. The cryptic string at the bottom is the structure in SMILES format — a standard way chemists write molecules as text.
+    </p>
+    <div class="molecules-list" id="mol-list">
+      <div class="empty-mols">warming up — looking for the latest designs…</div>
+    </div>
+  </section>
+
+  <!-- EXPLAINER -->
+  <section class="explain">
+    <h3>A note on what this is and isn't.</h3>
+    <p>
+      These molecules are <strong>computational hypotheses</strong>. They have not been synthesised, tested in bacteria, or reviewed by any regulator. Think of them as starting points: the agent is doing the 95% of medicinal-chemistry work that happens before any wet lab opens a vial.
+    </p>
+    <p>
+      If you run a lab that works on antibiotic development and something here looks interesting, reach out — the agent is generating these openly so they can be picked up.
+    </p>
+  </section>
+
+  <!-- FOOTER -->
   <footer>
     <div>
-      <a href="https://github.com/nextbysam/orb-antibiotic-scientist" target="_blank" rel="noopener">github</a>
+      <a href="https://github.com/nextbysam/orb-antibiotic-scientist">github</a>
       &nbsp;·&nbsp;
-      <a href="https://github.com/nextbysam/orb-antibiotic-scientist/blob/main/DISCLAIMER.md" target="_blank" rel="noopener">disclaimer</a>
+      <a href="https://github.com/nextbysam/orb-antibiotic-scientist/blob/main/DISCLAIMER.md">disclaimer</a>
       &nbsp;·&nbsp;refreshes every 5 s
     </div>
-    <div class="disclaimer">
-      candidates shown here are computational hypotheses, not therapies.
-      they have not been synthesised or tested in any biological assay.
+    <div class="right">
+      computational candidates, not therapies · not medical advice · MIT licence
     </div>
   </footer>
 
 </main>
-
-<!-- DETAIL PANEL -->
-<div class="detail-backdrop" id="detail-backdrop" role="dialog" aria-hidden="true">
-  <div class="detail-panel">
-    <button class="detail-close" id="detail-close">CLOSE ✕</button>
-    <div class="detail-panel-inner" id="detail-panel-inner">
-      <div class="empty spinner">loading…</div>
-    </div>
-  </div>
-</div>
 
 <script>
 /* ──────────────────────────────────────────────────────────
    helpers
    ────────────────────────────────────────────────────────── */
 const $ = (id) => document.getElementById(id);
-const escapeHtml = (s) => (s || "").toString()
-  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const escape = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-function fmtDuration(sec) {
+function fmtDuration(sec, { short = false } = {}) {
   sec = Math.max(0, Math.round(sec));
-  if (sec < 60)    return `${sec}s`;
-  if (sec < 3600)  return `${Math.floor(sec/60)}m ${sec%60}s`;
+  if (short) {
+    if (sec < 60)   return `${sec}s`;
+    if (sec < 3600) return `${Math.floor(sec/60)}m`;
+    return `${Math.floor(sec/3600)}h ${Math.floor((sec%3600)/60)}m`;
+  }
+  if (sec < 60)    return `${sec} seconds`;
+  if (sec < 120)   return `1 minute`;
+  if (sec < 3600)  return `${Math.floor(sec/60)} minutes`;
   return `${Math.floor(sec/3600)}h ${Math.floor((sec%3600)/60)}m`;
 }
+
 function fmtAgo(iso) {
   if (!iso) return "—";
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 2) return "just now";
-  if (diff < 60) return `${Math.round(diff)}s ago`;
-  if (diff < 3600) return `${Math.round(diff/60)}m ago`;
-  return `${Math.round(diff/3600)}h ago`;
-}
-function orbStateMeta(raw) {
-  const s = (raw || "").toLowerCase();
-  if (s === "running")    return { cls: "awake",   label: "AWAKE",         blurb: "designing candidates" };
-  if (s === "dumping" || s === "checkpointing")
-                          return { cls: "dumping", label: "CHECKPOINTING", blurb: "memory → NVMe snapshot" };
-  if (s === "restoring" || s === "waking")
-                          return { cls: "awake",   label: "WAKING",        blurb: "restoring from NVMe" };
-  if (s === "checkpointed" || s === "sleeping" || s === "frozen")
-                          return { cls: "asleep",  label: "SLEEPING",      blurb: "zero RAM · zero cost" };
-  if (s === "error")      return { cls: "err",     label: "ERROR",         blurb: "restart pending" };
-  if (!s)                 return { cls: "err",     label: "STOPPED",       blurb: "no agent process" };
-  return { cls: "asleep", label: s.toUpperCase(), blurb: "" };
+  const d = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (d < 5)    return "just now";
+  if (d < 60)   return `${Math.round(d)}s ago`;
+  if (d < 3600) return `${Math.round(d/60)}m ago`;
+  return `${Math.round(d/3600)}h ago`;
 }
 
 /* ──────────────────────────────────────────────────────────
-   build lifecycle bands from structured events
-   events = [{kind, ts, ...}] from the server
-   awake = between run_start and run_end
-   asleep = between restart and next run_start (the actual inter-run gap)
-   checkpoint marker = at each restart
-   wake marker = at each run_start
-   time window = session start to now, NOT fixed 60 min.
+   classify the "what is the agent doing" story
+   ────────────────────────────────────────────────────────── */
+function classifyState(state) {
+  const comp = (state.computers || [])[0] || {};
+  const s = (comp.agent_state || "").toLowerCase();
+  const candN = comp.findings_candidates || 0;
+
+  if (!comp.agent_state) {
+    return { orb: "err", chip: "offline", title: "The agent isn’t running right now.", desc: "The cloud container shows no live process." };
+  }
+  if (s === "running") {
+    return {
+      orb: "awake", chip: "working now",
+      title: `Designing the next molecule.`,
+      desc: `It has <em>${candN}</em> candidates saved so far. Right now it’s proposing another and running it through the twelve-gate filter chain.`,
+    };
+  }
+  if (s === "dumping" || s === "checkpointing") {
+    return {
+      orb: "checkpointing", chip: "going to sleep",
+      title: "Saving its work to disk.",
+      desc: "The agent just finished a task. The cloud is parking its memory to a checkpoint so nothing is billed while it idles.",
+    };
+  }
+  if (s === "restoring" || s === "waking") {
+    return {
+      orb: "waking", chip: "waking up",
+      title: "Coming back online.",
+      desc: "A trigger arrived — the agent is being restored from its checkpoint. This takes under a second.",
+    };
+  }
+  if (s === "checkpointed" || s === "sleeping" || s === "frozen") {
+    return {
+      orb: "asleep", chip: "sleeping",
+      title: `Sleeping between tasks.`,
+      desc: `It has designed <em>${candN}</em> molecules so far. It’s parked on disk right now, costing nothing. When the next task arrives, it’ll be back in under a second.`,
+    };
+  }
+  if (s === "error") {
+    return { orb: "err", chip: "recovering", title: "Last run errored. Restarting…", desc: "The process is cycling — new designs will resume shortly." };
+  }
+  return { orb: "asleep", chip: s, title: "Agent is idle.", desc: "" };
+}
+
+/* ──────────────────────────────────────────────────────────
+   lifecycle bands from structured events
    ────────────────────────────────────────────────────────── */
 function buildBands(events, sessionStartMs, nowMs) {
-  if (!events || !events.length) {
-    return { bands: [], checkpoints: [], wakes: [], startMs: nowMs, endMs: nowMs };
-  }
-  const startMs = sessionStartMs;
+  if (!events || !events.length) return { bands: [], wakes: 0 };
   const bands = [];
-  const checkpoints = [];
-  const wakes = [];
   let awakeSince = null;
-
+  let wakes = 0;
   for (const e of events) {
     const ms = new Date(e.ts).getTime();
-    if (isNaN(ms) || ms < startMs || ms > nowMs) continue;
+    if (isNaN(ms) || ms > nowMs) continue;
     if (e.kind === "run_start" || e.kind === "startup") {
-      if (awakeSince === null) {
-        wakes.push(ms);
-        awakeSince = ms;
-      }
-    } else if (e.kind === "run_end") {
-      if (awakeSince !== null) {
-        bands.push({ from: awakeSince, to: ms, awake: true });
-      }
-      awakeSince = null;
-    } else if (e.kind === "restart") {
-      if (awakeSince !== null) {
-        bands.push({ from: awakeSince, to: ms, awake: true });
-      }
-      checkpoints.push(ms);
-      awakeSince = null;
+      if (awakeSince === null) { awakeSince = Math.max(ms, sessionStartMs); wakes++; }
+    } else if (e.kind === "run_end" || e.kind === "restart") {
+      if (awakeSince !== null) { bands.push({ from: awakeSince, to: ms, awake: true }); awakeSince = null; }
     }
   }
-  if (awakeSince !== null) {
-    bands.push({ from: awakeSince, to: nowMs, awake: true });
-  }
-  // Asleep gaps = complement
-  const asleep = [];
-  let cursor = startMs;
+  if (awakeSince !== null) bands.push({ from: awakeSince, to: nowMs, awake: true });
+  return { bands, wakes };
+}
+
+/* ──────────────────────────────────────────────────────────
+   render "live now" card
+   ────────────────────────────────────────────────────────── */
+function renderNow(state) {
+  const c = classifyState(state);
+  const orbEl = $("now-orb");
+  orbEl.dataset.state = c.orb;
+  $("state-label").textContent = c.chip;
+  $("headline").innerHTML = escape(c.title).replace(/&lt;em&gt;/g, "<em>").replace(/&lt;\/em&gt;/g, "</em>");
+
+  // The desc contains injected <em>...</em> from our template, preserve it
+  $("desc").innerHTML = c.desc;
+
+  // live-tag dot
+  const ldot = $("live-dot");
+  const llbl = $("live-label");
+  if (c.orb === "awake") { ldot.className = "live-dot"; llbl.textContent = "live"; }
+  else if (c.orb === "err") { ldot.className = "live-dot off"; llbl.textContent = "offline"; }
+  else { ldot.className = "live-dot idle"; llbl.textContent = "idle"; }
+}
+
+/* ──────────────────────────────────────────────────────────
+   render sleep/wake timeline (last hour window)
+   ────────────────────────────────────────────────────────── */
+function renderSleepTimeline(state, detail) {
+  const comp = (state.computers || [])[0] || {};
+  const nowMs = Date.now();
+  const windowMs = 60 * 60 * 1000;
+  const windowStart = nowMs - windowMs;
+  const sessionStart = comp.session_started_at ? new Date(comp.session_started_at).getTime() : windowStart;
+  // Actual session window — cap at window start so stats don't lie when session < 1hr
+  const effectiveStart = Math.max(sessionStart, windowStart);
+  const effectiveMs = nowMs - effectiveStart;
+
+  const events = (detail && detail.events) || [];
+  const { bands, wakes } = buildBands(events, effectiveStart, nowMs);
+
+  // Build timeline cells proportionally
+  let awakeSec = 0, asleepSec = 0;
   for (const b of bands) {
-    if (b.from > cursor) asleep.push({ from: cursor, to: b.from, awake: false });
+    const s = Math.min(b.to, nowMs) - Math.max(b.from, effectiveStart);
+    if (s > 0 && b.awake) awakeSec += s / 1000;
+  }
+  const totalSec = Math.max(1, effectiveMs / 1000);
+  asleepSec = Math.max(0, totalSec - awakeSec);
+
+  // Render actual bars (awake segments + asleep complement) over the effective window
+  const tl = $("sw-timeline");
+  tl.innerHTML = "";
+
+  if (sessionStart > windowStart) {
+    const preFrac = (sessionStart - windowStart) / windowMs * 100;
+    if (preFrac > 0.5) {
+      const pre = document.createElement("div");
+      pre.className = "sw-block asleep";
+      pre.style.flex = `${preFrac}`;
+      pre.title = "before session started";
+      tl.appendChild(pre);
+    }
+  }
+  // Fill in the session window with real bands, plus gaps
+  let cursor = effectiveStart;
+  const sortedAwake = bands.filter(b => b.awake).sort((a,b) => a.from - b.from);
+  for (const b of sortedAwake) {
+    if (b.from > cursor) {
+      const gapFrac = (b.from - cursor) / windowMs * 100;
+      if (gapFrac > 0.1) {
+        const gap = document.createElement("div");
+        gap.className = "sw-block asleep";
+        gap.style.flex = `${gapFrac}`;
+        gap.title = `sleeping ${fmtDuration((b.from - cursor)/1000)}`;
+        tl.appendChild(gap);
+      }
+    }
+    const bFrac = (Math.min(b.to, nowMs) - Math.max(b.from, cursor)) / windowMs * 100;
+    if (bFrac > 0.1) {
+      const aw = document.createElement("div");
+      aw.className = "sw-block awake";
+      aw.style.flex = `${bFrac}`;
+      aw.title = `working ${fmtDuration((b.to - b.from)/1000)}`;
+      tl.appendChild(aw);
+    }
     cursor = Math.max(cursor, b.to);
   }
-  if (cursor < nowMs) asleep.push({ from: cursor, to: nowMs, awake: false });
+  if (cursor < nowMs) {
+    const gapFrac = (nowMs - cursor) / windowMs * 100;
+    if (gapFrac > 0.1) {
+      const gap = document.createElement("div");
+      gap.className = "sw-block asleep";
+      gap.style.flex = `${gapFrac}`;
+      gap.title = `sleeping ${fmtDuration((nowMs - cursor)/1000)}`;
+      tl.appendChild(gap);
+    }
+  }
 
-  return {
-    bands: [...bands, ...asleep].sort((a,b) => a.from - b.from),
-    checkpoints, wakes, startMs, endMs: nowMs,
-  };
+  $("sw-work").textContent = fmtDuration(awakeSec);
+  $("sw-sleep").textContent = fmtDuration(asleepSec);
+  $("sw-wakes").textContent = `${wakes}`;
+  const ss = comp.session_started_at ? `since ${fmtAgo(comp.session_started_at)}` : "last hour";
+  $("sw-window").textContent = effectiveMs < windowMs ? ss : "last hour";
 }
 
 /* ──────────────────────────────────────────────────────────
-   fleet overview (root view)
+   render stats row (work done)
    ────────────────────────────────────────────────────────── */
-function renderUsage(u) {
-  const cost = (u && u.estimated_cost_usd != null) ? u.estimated_cost_usd : null;
-  const rt = u && u.runtime_gb_hours;
-  const disk = u && u.disk_gb_hours;
-  $("u-cycles").textContent = (u && u.checkpoint_cycles != null)
-    ? u.checkpoint_cycles.toLocaleString() : "—";
-  $("u-gbh").textContent = (rt != null && disk != null)
-    ? `${rt.toFixed(1)} · ${disk.toFixed(1)}` : "—";
-  $("u-gbh-sub").textContent = "GB-hours (runtime · disk)";
-  $("u-cost").textContent = cost != null ? `≈ $${cost.toFixed(2)}` : "—";
-  $("u-cost-sub").textContent = u && u.estimate_note
-    ? u.estimate_note : "since billing period start";
+let prevCand = 0;
+function renderStats(state) {
+  const comp = (state.computers || [])[0] || {};
+  const u = state.usage || {};
+
+  const candN = comp.findings_candidates || 0;
+  const candEl = $("s-cand");
+  if (candN !== prevCand) {
+    candEl.classList.add("pulse");
+    setTimeout(() => candEl.classList.remove("pulse"), 800);
+    prevCand = candN;
+  }
+  candEl.textContent = candN.toLocaleString();
+  $("s-cand-sub").textContent = comp.session_started_at
+    ? `started ${fmtAgo(comp.session_started_at)}`
+    : "total across the agent's life";
+
+  // "time spent working" — from events where available, else runtime_gb_hours proxy
+  const runtime_gbh = (u.runtime_gb_hours != null) ? u.runtime_gb_hours : null;
+  const rtMb = comp.runtime_mb || 4096;
+  const runtime_hours = runtime_gbh != null ? runtime_gbh / (rtMb / 1024) : null;
+  if (runtime_hours != null) {
+    const worked_sec = runtime_hours * 3600;
+    const d = Math.floor(worked_sec / 86400);
+    const h = Math.floor((worked_sec % 86400) / 3600);
+    const m = Math.floor((worked_sec % 3600) / 60);
+    let str, unit;
+    if (d > 0) { str = `${d}`; unit = d === 1 ? "day" : "days"; }
+    else if (h > 0) { str = `${h}`; unit = h === 1 ? "hour" : "hours"; }
+    else { str = `${m}`; unit = m === 1 ? "minute" : "minutes"; }
+    $("s-time").childNodes[0].textContent = str;
+    $("s-time-unit").textContent = " " + unit;
+    $("s-time-sub").textContent = `across the whole billing period`;
+  } else {
+    $("s-time").textContent = "—";
+    $("s-time-unit").textContent = "";
+    $("s-time-sub").textContent = "calculating…";
+  }
+
+  // cost
+  const cost = u.estimated_cost_usd;
+  if (cost != null) {
+    if (cost < 0.1)      $("s-cost").textContent = `¢${Math.round(cost * 100)}`;
+    else if (cost < 10)  $("s-cost").textContent = `$${cost.toFixed(2)}`;
+    else                 $("s-cost").textContent = `$${cost.toFixed(0)}`;
+    $("s-cost-sub").textContent = "≈ rough estimate of cloud bill so far";
+  } else {
+    $("s-cost").textContent = "—";
+  }
 }
 
-function renderFleet(computers) {
-  const fleet = $("fleet");
-  const totalCand = computers.reduce((s, c) => s + (c.findings_candidates || 0), 0);
-  $("fleet-meta").textContent = `${computers.length} agent${computers.length===1?'':'s'} · ${totalCand} candidates`;
-  $("u-cand").textContent = totalCand.toLocaleString();
-
-  if (!computers.length) {
-    fleet.innerHTML = `<div class="empty">no Orb computers in this account yet.</div>`;
+/* ──────────────────────────────────────────────────────────
+   render molecules list
+   ────────────────────────────────────────────────────────── */
+function renderMolecules(detail) {
+  const list = $("mol-list");
+  const cands = (detail && detail.candidates_list) || [];
+  if (!cands.length) {
+    list.innerHTML = `<div class="empty-mols">warming up — looking for the latest designs…</div>`;
     return;
   }
-  fleet.innerHTML = computers.map(c => {
-    const m = orbStateMeta(c.agent_state);
-    const started = c.session_started_at ? fmtAgo(c.session_started_at) : "—";
-    const latest = c.last_event_at ? fmtAgo(c.last_event_at) : "—";
-    return `
-      <article class="fleet-card" data-id="${c.id}">
-        <div class="card-head">
-          <div>
-            <div class="card-title">${escapeHtml(c.name || c.id)}</div>
-            <div class="card-id">${escapeHtml((c.id || '').slice(0,8))}</div>
-          </div>
-          <div class="mini-orb-wrap">
-            <div class="mini-orb ${m.cls}"></div>
-          </div>
-        </div>
-        <div>
-          <div class="card-row"><span class="k">state</span><span class="v state-${m.cls}">${m.label}</span></div>
-          <div class="card-row"><span class="k">doing</span><span class="v">${m.blurb}</span></div>
-          <div class="card-row"><span class="k">candidates</span><span class="v">${(c.findings_candidates||0).toLocaleString()}</span></div>
-          <div class="card-row"><span class="k">session</span><span class="v">${started === "—" ? "—" : "started "+started}</span></div>
-          <div class="card-row"><span class="k">last event</span><span class="v">${latest}</span></div>
-          <div class="card-row"><span class="k">resources</span><span class="v">${(c.runtime_mb/1024).toFixed(0)}·${(c.disk_mb/1024).toFixed(0)} GB</span></div>
-        </div>
-        <div class="card-cta">click to drill in →</div>
-      </article>`;
-  }).join("");
-}
-
-/* ──────────────────────────────────────────────────────────
-   detail panel
-   ────────────────────────────────────────────────────────── */
-let currentDetailId = null;
-
-function openDetail(computerId) {
-  currentDetailId = computerId;
-  $("detail-backdrop").classList.add("open");
-  $("detail-backdrop").setAttribute("aria-hidden", "false");
-  $("detail-panel-inner").innerHTML = `<div class="empty spinner">loading detail…</div>`;
-  // Force an immediate fetch with this computer id
-  tick();
-}
-function closeDetail() {
-  currentDetailId = null;
-  $("detail-backdrop").classList.remove("open");
-  $("detail-backdrop").setAttribute("aria-hidden", "true");
-}
-
-function renderDetail(detail, summary) {
-  const m = orbStateMeta(summary ? summary.agent_state : null);
-  const nowMs = Date.now();
-  const sessionStart = summary && summary.session_started_at;
-  const sessionStartMs = sessionStart ? new Date(sessionStart).getTime() : nowMs;
-  const sessionSec = (nowMs - sessionStartMs) / 1000;
-
-  const lc = buildBands(detail.events, sessionStartMs, nowMs);
-  let awakeSec = 0, asleepSec = 0;
-  for (const b of lc.bands) {
-    const s = (b.to - b.from) / 1000;
-    if (b.awake) awakeSec += s; else asleepSec += s;
-  }
-  const totalSec = Math.max(1, awakeSec + asleepSec);
-  const awakePct = Math.round((awakeSec / totalSec) * 100);
-  const asleepPct = 100 - awakePct;
-
-  const cands = detail.candidates_list || [];
-  const candN = (detail.findings && detail.findings.candidates) || 0;
-
-  // Build timeline HTML
-  const winMs = Math.max(nowMs - sessionStartMs, 1);
-  const bandsHtml = lc.bands.map(b => {
-    const left = ((b.from - sessionStartMs) / winMs) * 100;
-    const width = Math.max(0.3, ((b.to - b.from) / winMs) * 100);
-    return `<div class="timeline-bar ${b.awake ? 'awake' : 'asleep'}"
-                 style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%"
-                 title="${b.awake ? 'awake' : 'sleeping'} · ${fmtDuration((b.to-b.from)/1000)}"></div>`;
-  }).join("");
-  const cpsHtml = lc.checkpoints.map(ms => {
-    const x = ((ms - sessionStartMs) / winMs) * 100;
-    return `<div class="timeline-marker checkpoint" style="left:${x.toFixed(2)}%"
-                 title="checkpoint · ${fmtAgo(new Date(ms).toISOString())}"></div>`;
-  }).join("");
-  const wksHtml = lc.wakes.map(ms => {
-    const x = ((ms - sessionStartMs) / winMs) * 100;
-    return `<div class="timeline-marker wake" style="left:${x.toFixed(2)}%"
-                 title="wake · ${fmtAgo(new Date(ms).toISOString())}"></div>`;
-  }).join("");
-
-  const candsHtml = cands.length ? cands.slice(0, 20).map((c, i) => {
+  list.innerHTML = cands.slice(0, 8).map((c, i) => {
     const smi = c.smiles ? String(c.smiles) : "";
-    const smiShort = smi.length > 80 ? smi.slice(0, 78) + "…" : smi;
+    const smiShort = smi.length > 82 ? smi.slice(0, 80) + "…" : smi;
+    const name = c.name || c.candidate_id || "—";
     return `
-      <div class="cand-row">
-        <div class="cand-n">${String(i+1).padStart(2,'0')}</div>
-        <div class="cand-body">
-          <div class="cand-id">${escapeHtml(c.candidate_id || c.name || "—")}</div>
-          ${c.name ? `<div class="cand-name">${escapeHtml(c.name)}</div>` : ""}
-          ${smi ? `<div class="cand-smi" title="${escapeHtml(smi)}">${escapeHtml(smiShort)}</div>` : ""}
+      <div class="mol-row">
+        <div class="mol-n">${i + 1}</div>
+        <div class="mol-body">
+          <div class="mol-name">${escape(name)}</div>
+          <div class="mol-id">${escape(c.candidate_id || "")}</div>
+          ${smi ? `<div class="mol-smi" title="${escape(smi)}">${escape(smiShort)}</div>` : ""}
         </div>
-        <div class="cand-ago">${c.designed_at ? fmtAgo(c.designed_at) : "—"}</div>
+        <div class="mol-ago">${c.designed_at ? fmtAgo(c.designed_at) : "—"}</div>
       </div>`;
-  }).join("") : `<div class="empty">waiting for first candidate…</div>`;
-
-  const nameLabel = escapeHtml(summary ? (summary.name || summary.id) : "agent");
-  const idShort = escapeHtml((summary && summary.id ? summary.id : "").slice(0, 8));
-
-  $("detail-panel-inner").innerHTML = `
-    <div class="detail-hero">
-      <div class="big-orb-wrap"><div class="big-orb ${m.cls}"></div></div>
-      <div class="meta">
-        <div class="name">${nameLabel}</div>
-        <div class="id">${idShort}</div>
-        <div class="state-pill ${m.cls}">${m.label}</div>
-        <div class="desc">${m.blurb} · ${candN.toLocaleString()} candidates designed</div>
-      </div>
-    </div>
-
-    <section class="timeline-block">
-      <div class="section-head">
-        <div class="section-label">lifecycle · since session start</div>
-        <div class="section-meta">${fmtDuration(sessionSec)} total · ${awakePct}% awake · ${asleepPct}% sleeping</div>
-      </div>
-      <div class="timeline" id="detail-timeline">${bandsHtml}${cpsHtml}${wksHtml}</div>
-      <div class="timeline-axis">
-        <span>${sessionStart ? fmtAgo(sessionStart) : '—'}</span>
-        <span></span>
-        <span>now</span>
-      </div>
-      <div class="timeline-legend">
-        <span><span class="sw awake"></span>awake</span>
-        <span><span class="sw asleep"></span>sleeping</span>
-        <span><span class="sw check"></span>checkpoint</span>
-        <span><span class="sw wake"></span>wake</span>
-      </div>
-      <div class="stat-row">
-        <div class="stat">
-          <div class="n">${fmtDuration(awakeSec)}</div>
-          <div class="lbl">awake time</div>
-          <div class="sub">${awakePct}% of session</div>
-        </div>
-        <div class="stat">
-          <div class="n">${fmtDuration(asleepSec)}</div>
-          <div class="lbl">sleeping time</div>
-          <div class="sub">$0 runtime cost while asleep</div>
-        </div>
-        <div class="stat">
-          <div class="n">${lc.checkpoints.length}</div>
-          <div class="lbl">checkpoint cycles</div>
-          <div class="sub">${lc.wakes.length} wake${lc.wakes.length===1?'':'s'} · avg wake &lt; 1 s</div>
-        </div>
-      </div>
-    </section>
-
-    <section class="timeline-block">
-      <div class="section-head">
-        <div class="section-label">candidates designed</div>
-        <div class="section-meta">${cands.length} shown · ${candN} total</div>
-      </div>
-      <div class="candidates">${candsHtml}</div>
-    </section>
-  `;
+  }).join("");
 }
 
 /* ──────────────────────────────────────────────────────────
-   fetch loop
+   fetch loop — always asks for detail on the active (first) computer
    ────────────────────────────────────────────────────────── */
 let failStreak = 0;
-let lastState = null;
-
 async function tick() {
   try {
-    const qs = currentDetailId ? "?computer=" + encodeURIComponent(currentDetailId) : "";
-    const r = await fetch("/api/state" + qs + (qs ? "&" : "?") + "t=" + Date.now(),
-                          { cache: "no-store" });
+    // First: cheap overview fetch
+    let r = await fetch("/api/state?t=" + Date.now(), { cache: "no-store" });
     if (!r.ok) throw new Error("HTTP " + r.status);
-    const j = await r.json();
-    failStreak = 0;
-    lastState = j;
-    $("rdot").classList.remove("err");
-    $("refresh-label").textContent = "live";
-
-    renderUsage(j.usage || {});
-    renderFleet(j.computers || []);
-
-    if (currentDetailId && j.detail && !j.detail.error) {
-      const summary = (j.computers || []).find(c => c.id === currentDetailId);
-      renderDetail(j.detail, summary);
-    } else if (currentDetailId && j.detail && j.detail.error) {
-      $("detail-panel-inner").innerHTML =
-        `<div class="empty">${escapeHtml(j.detail.error)}</div>`;
+    let state = await r.json();
+    // Then: if we have a computer, fetch detail too
+    const firstId = ((state.computers || [])[0] || {}).id;
+    let detail = null;
+    if (firstId) {
+      r = await fetch("/api/state?computer=" + encodeURIComponent(firstId) + "&t=" + Date.now(), { cache: "no-store" });
+      if (r.ok) {
+        const full = await r.json();
+        detail = full.detail || null;
+        // use the authoritative 'computers' list from the detailed fetch too
+        state = full;
+      }
     }
-    $("clock").textContent = "updated " + fmtAgo(j.timestamp);
+    failStreak = 0;
+    renderNow(state);
+    renderSleepTimeline(state, detail);
+    renderStats(state);
+    renderMolecules(detail);
   } catch (e) {
     failStreak++;
-    $("rdot").classList.add("err");
-    $("refresh-label").textContent = failStreak < 3 ? "reconnecting…" : "offline";
+    if (failStreak >= 3) {
+      $("live-dot").className = "live-dot off";
+      $("live-label").textContent = "offline";
+      $("state-label").textContent = "offline";
+      $("headline").textContent = "Can't reach the agent right now.";
+      $("desc").textContent = "Network or proxy issue. Will retry.";
+    }
   }
 }
-
-/* ambient clock */
-setInterval(() => {
-  if (lastState && lastState.timestamp) {
-    $("clock").textContent = "updated " + fmtAgo(lastState.timestamp);
-  }
-}, 1000);
-
-/* event wiring */
-document.addEventListener("click", (e) => {
-  const card = e.target.closest(".fleet-card");
-  if (card) {
-    openDetail(card.getAttribute("data-id"));
-  }
-});
-$("detail-close").addEventListener("click", closeDetail);
-$("detail-backdrop").addEventListener("click", (e) => {
-  if (e.target.id === "detail-backdrop") closeDetail();
-});
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && currentDetailId) closeDetail();
-});
-
 tick();
 setInterval(tick, 5000);
 </script>
