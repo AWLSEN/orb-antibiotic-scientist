@@ -61,9 +61,12 @@ ANTHROPIC_DEFAULT_OPUS_MODEL    = "GLM-4.7"
 ANTHROPIC_DEFAULT_SONNET_MODEL  = "GLM-4.7"
 ANTHROPIC_DEFAULT_HAIKU_MODEL   = "GLM-4.5-Air"
 
-# Secrets: MUST use the "${NAME}" placeholder form. The matching secret
-# is supplied via the build endpoint's org_secrets JSON field (see
-# scripts/orb_deploy.sh). Without a matching secret the variable
-# resolves to the empty string.
+# Secret: MUST use the "${NAME}" placeholder form. Orb validates every
+# placeholder has a matching org_secrets entry on the /agents start
+# request and 400s the deploy otherwise, so only declare placeholders
+# for secrets we actually pass.
+#
+# For Z.AI (default), ANTHROPIC_AUTH_TOKEN is the Z.AI key.
+# For native Anthropic, the deploy script aliases the same placeholder
+# to the Anthropic key — Claude Code accepts either env var name.
 ANTHROPIC_AUTH_TOKEN            = "${ANTHROPIC_AUTH_TOKEN}"
-ANTHROPIC_API_KEY               = "${ANTHROPIC_API_KEY}"
