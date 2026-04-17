@@ -13,6 +13,7 @@ in README.md.
 """
 
 import asyncio
+import json
 import os
 import time
 import traceback
@@ -236,6 +237,38 @@ def main():
     log("orb-antibiotic-scientist -- Claude Agent SDK")
     log("Auto-compaction enabled. Runs indefinitely.")
     log("============================================")
+
+    # Diagnostic: log which Z.AI / Anthropic env vars actually reached
+    # this process. Claude Code CLI (spawned by claude-agent-sdk) inherits
+    # our env, so if these are empty/missing, auth will fail downstream.
+    _env_report = {
+        k: ("<set>" if os.environ.get(k) else "<MISSING>")
+        for k in (
+            "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY",
+            "ANTHROPIC_BASE_URL", "API_TIMEOUT_MS",
+            "ANTHROPIC_DEFAULT_OPUS_MODEL",
+            "ANTHROPIC_DEFAULT_SONNET_MODEL",
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        )
+    }
+    log(f"env report: {_env_report}")
+    log(f"ANTHROPIC_BASE_URL value: {os.environ.get('ANTHROPIC_BASE_URL', '<unset>')}")
+    log(f"ANTHROPIC_AUTH_TOKEN present: {bool(os.environ.get('ANTHROPIC_AUTH_TOKEN'))}")
+    # Dump the full env keys (not values) to findings/ so I can inspect
+    # via the Orb file API without re-reading log tails.
+    try:
+        (LOG_DIR / "env-snapshot.json").write_text(
+            json.dumps(
+                {k: (v if k.startswith(("ORB_", "PYTHON", "PATH", "HOME", "LANG",
+                                         "ANTHROPIC_BASE_URL", "ANTHROPIC_DEFAULT",
+                                         "API_TIMEOUT_MS"))
+                     else "<redacted>")
+                 for k, v in os.environ.items()},
+                indent=2, sort_keys=True,
+            )
+        )
+    except Exception as exc:
+        log(f"env-snapshot write failed: {exc}")
 
     try:
         asyncio.run(run_agent())
