@@ -85,7 +85,9 @@ reference_inhibitors:
   # and their rank among recent candidates must stay in the top 5%.
   # A drop outside these bounds halts the agent and alerts the operator.
   - name: "novobiocin"
-    smiles: "COC1=C(C(=O)C2=CC(=C(O2)CC=C(C)C)O)C(=C(C=C1OC)NC(=O)C3=C(C(=C(C=C3)O)C)O)O"
+    # Full novobiocin (aglycone + noviose sugar). Contains the 3-amido-4-
+    # hydroxycoumarin moiety that the aminocoumarin scaffold SMARTS matches.
+    smiles: "CC1(C)OC2C(OC(=O)N)C(OC)C(Oc3ccc(C(=O)Nc4c(O)c5cc(CC=C(C)C)c(O)cc5oc4=O)cc3C)OC2O1"
     ki_nm: 50
     assay: "S. aureus GyrB ATPase inhibition"
     pubchem_cid: 54675769
@@ -133,16 +135,24 @@ novelty:
   scaffold_class_blocklist:
     # Reject candidates that are obvious re-derivatives of known antibiotic
     # scaffolds. novelty.py does substructure matching against these SMARTS.
+    # All patterns tested against known members of each class (see
+    # tests/test_novelty.py).
     - name: "beta_lactam_core"
-      smarts: "C1C(=O)N1"
-    - name: "aminocoumarin_3_amide"
-      smarts: "O=C(N)c1cc2ccc(O)cc2oc1=O"
+      smarts: "N1C(=O)CC1"
+      matches: "penicillins, cephalosporins, carbapenems, monobactams"
     - name: "fluoroquinolone_core"
-      smarts: "O=C(O)C1=CC2=CC=CC=C2N(C1)C1CC1"
-    - name: "tetracycline_core"
-      smarts: "OC1=C2C(=O)C3C4CCCC4C(=O)C3C(=O)C2=C(O)C2=C1CCC2"
-    - name: "aminoglycoside_pyranose"
-      smarts: "[NH2,NH]C1OC(CO)C(O)C(O)C1O"
+      smarts: "O=c1ccn([*])c2ccccc12"
+      matches: "ciprofloxacin, moxifloxacin, levofloxacin, norfloxacin"
+    - name: "aminocoumarin_3_amide"
+      smarts: "O=c1oc2ccccc2c(O)c1NC=O"
+      matches: "novobiocin, clorobiocin, coumermycin"
+    - name: "aminoglycoside_aminosugar"
+      smarts: "[NX3;H2,H1;!$(NC=O)][CX4;R][CX4;R][CX4;R]O[CX4;R][CX4;R]"
+      matches: "kanamycin, gentamicin, streptomycin (2-aminosugar in pyranose)"
+    # Tetracycline/naphthacene core is intentionally omitted from v1 — a
+    # reliable SMARTS for the 4-fused-ring system with correct saturation
+    # pattern is brittle. Tetracycline-class rediscovery is also unlikely
+    # from de novo small-molecule design. Add in a future commit if needed.
 
 admet_gates:
   # Red-flag filters in src/tools/admet.py. Any flag fails Layer 8.
