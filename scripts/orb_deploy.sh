@@ -147,8 +147,20 @@ start_agent() {
             fi
             [[ -n "$key" ]] || die "ANTHROPIC_AUTH_TOKEN (Z.AI key) required for provider=zai"
             log "starting agent on $cid (provider=zai → routing to Z.AI GLM Coding Plan)"
-            payload=$(jq -n --arg k "$key" \
-                '{task:"start",org_secrets:{ANTHROPIC_AUTH_TOKEN:$k}}')
+            # Send ALL Z.AI env vars via org_secrets. The [env] section in
+            # orb.toml is not reliably applied — only org_secrets reaches
+            # the agent process for sure.
+            payload=$(jq -n --arg k "$key" '{
+                task:"start",
+                org_secrets:{
+                    ANTHROPIC_AUTH_TOKEN:           $k,
+                    ANTHROPIC_BASE_URL:             "https://api.z.ai/api/anthropic",
+                    API_TIMEOUT_MS:                 "3000000",
+                    ANTHROPIC_DEFAULT_OPUS_MODEL:   "GLM-4.7",
+                    ANTHROPIC_DEFAULT_SONNET_MODEL: "GLM-4.7",
+                    ANTHROPIC_DEFAULT_HAIKU_MODEL:  "GLM-4.5-Air"
+                }
+            }')
             ;;
         anthropic)
             : "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY required for provider=anthropic}"
