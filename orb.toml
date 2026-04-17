@@ -49,24 +49,20 @@ disk    = "10GB"
 
 [agent.env]
 # Orb injects this section into the agent process env. Bare strings are
-# literal; "${VAR}" placeholders are filled from org_secrets at deploy
-# time. Substring interpolation ("Bearer ${VAR}") is NOT supported.
+# literal; "${VAR}" placeholders are filled from org_secrets on the
+# /agents start request. Substring interpolation is NOT supported.
+#
+# NOTE: Orb auto-sets ANTHROPIC_BASE_URL (and OPENAI_BASE_URL etc.) to
+# its own proxy URL — the proxy forwards outbound LLM calls to the
+# endpoint configured in [llm].base_url. Do NOT override those here
+# or the proxy path is bypassed.
 PYTHONUNBUFFERED                = "1"
 ORB_ANTIBIOTIC_TARGET           = "targets/mrsa-gyrb.yaml"
-
-# Z.AI GLM Coding Plan routing — literal values (non-secret).
-ANTHROPIC_BASE_URL              = "https://api.z.ai/api/anthropic"
 API_TIMEOUT_MS                  = "3000000"
+# Model mappings for Claude Code (Z.AI expects these specific values to
+# route Opus/Sonnet/Haiku requests to GLM-4.7 / GLM-4.5-Air).
 ANTHROPIC_DEFAULT_OPUS_MODEL    = "GLM-4.7"
 ANTHROPIC_DEFAULT_SONNET_MODEL  = "GLM-4.7"
 ANTHROPIC_DEFAULT_HAIKU_MODEL   = "GLM-4.5-Air"
-
-# Secret: MUST use the "${NAME}" placeholder form. Orb validates every
-# placeholder has a matching org_secrets entry on the /agents start
-# request and 400s the deploy otherwise, so only declare placeholders
-# for secrets we actually pass.
-#
-# For Z.AI (default), ANTHROPIC_AUTH_TOKEN is the Z.AI key.
-# For native Anthropic, the deploy script aliases the same placeholder
-# to the Anthropic key — Claude Code accepts either env var name.
+# The only secret we need. Passed via org_secrets on the /agents call.
 ANTHROPIC_AUTH_TOKEN            = "${ANTHROPIC_AUTH_TOKEN}"

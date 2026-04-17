@@ -263,37 +263,55 @@ def main():
     log("Auto-compaction enabled. Runs indefinitely.")
     log("============================================")
 
-    # Diagnostic: log which Z.AI / Anthropic env vars actually reached
-    # this process. Claude Code CLI (spawned by claude-agent-sdk) inherits
-    # our env, so if these are empty/missing, auth will fail downstream.
-    _env_report = {
-        k: ("<set>" if os.environ.get(k) else "<MISSING>")
-        for k in (
-            "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY",
-            "ANTHROPIC_BASE_URL", "API_TIMEOUT_MS",
-            "ANTHROPIC_DEFAULT_OPUS_MODEL",
-            "ANTHROPIC_DEFAULT_SONNET_MODEL",
-            "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    # Diagnostic: dump env-var presence + Orb proxy URL so we can see
+    # what actually reached this process. Claude Code inherits our env,
+    # so anything missing here explains any downstream auth failures.
+    _tracked = [
+        "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY",
+        "ANTHROPIC_BASE_URL", "OPENAI_BASE_URL", "ORB_PROXY_URL",
+        "API_TIMEOUT_MS",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "ORB_TASK",
+    ]
+    _report = {
+        k: (
+            "<set>" if (k == "ANTHROPIC_AUTH_TOKEN" or k == "ANTHROPIC_API_KEY") and os.environ.get(k)
+            else os.environ.get(k) or "<MISSING>"
         )
+        for k in _tracked
     }
-    log(f"env report: {_env_report}")
-    log(f"ANTHROPIC_BASE_URL value: {os.environ.get('ANTHROPIC_BASE_URL', '<unset>')}")
-    log(f"ANTHROPIC_AUTH_TOKEN present: {bool(os.environ.get('ANTHROPIC_AUTH_TOKEN'))}")
-    # Dump the full env keys (not values) to findings/ so I can inspect
-    # via the Orb file API without re-reading log tails.
+    log(f"env report: {_report}")
+
+    # Full env snapshot written early so the dashboard can read it even
+    # if the agent later fails. Secrets redacted.
     try:
-        (LOG_DIR / "env-snapshot.json").write_text(
-            json.dumps(
-                {k: (v if k.startswith(("ORB_", "PYTHON", "PATH", "HOME", "LANG",
-                                         "ANTHROPIC_BASE_URL", "ANTHROPIC_DEFAULT",
-                                         "API_TIMEOUT_MS"))
-                     else "<redacted>")
-                 for k, v in os.environ.items()},
-                indent=2, sort_keys=True,
-            )
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        snap_path = LOG_DIR / "env-snapshot.json"
+        allowlist_prefixes = (
+            "ORB_", "PYTHON", "ANTHROPIC_BASE_URL", "ANTHROPIC_DEFAULT",
+            "OPENAI_BASE_URL", "GOOGLE_API_BASE_URL", "LLM_BASE_URL",
+            "API_TIMEOUT_MS",
         )
+        allowlist_exact = ("PATH", "HOME", "LANG", "LC_ALL", "PWD", "USER", "SHELL")
+        redact_exact = ("ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY")
+        snap = {}
+        for k, v in os.environ.items():
+            if k in redact_exact:
+                snap[k] = "<set>"
+            elif k.startswith(allowlist_prefixes) or k in allowlist_exact:
+                snap[k] = v
+            else:
+                snap[k] = "<redacted>"
+        # Add sentinel so the dashboard can distinguish "file exists but
+        # key absent" from "file doesn't exist".
+        snap["__snapshot_written_at__"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        snap_path.write_text(json.dumps(snap, indent=2, sort_keys=True))
+        log(f"env-snapshot.json written ({len(snap)} keys)")
     except Exception as exc:
         log(f"env-snapshot write failed: {exc}")
+        log(traceback.format_exc())
 
     try:
         asyncio.run(run_agent())
