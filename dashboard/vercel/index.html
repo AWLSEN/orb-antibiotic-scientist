@@ -360,45 +360,30 @@ header .live {
   margin: 1.2rem 0 1rem;
 }
 
-.hiw-cost {
-  display: flex; flex-direction: column; gap: 0.8rem;
-  margin-bottom: 0.9rem;
+.hiw-stats {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 0.9rem; margin-bottom: 0.9rem;
 }
-.hiw-cost-row {
-  display: grid; grid-template-columns: minmax(180px, 1.4fr) 1fr auto;
-  gap: 1.1rem; align-items: center;
+@media (max-width: 640px) { .hiw-stats { grid-template-columns: 1fr; } }
+.hiw-stat {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.9rem 1.1rem;
+  background: var(--bg);
 }
-@media (max-width: 640px) {
-  .hiw-cost-row { grid-template-columns: 1fr auto; }
-  .hiw-cost-bar { grid-column: 1 / -1; order: 3; }
-}
-.hiw-cost-label {
-  font-size: 0.86rem; color: var(--ink);
-}
-.hiw-cost-label .hiw-cost-sub {
-  color: var(--ink-soft); font-size: 0.78em;
-  display: inline-block; margin-left: 0.2rem;
-}
-.hiw-cost-bar {
-  height: 3px; background: var(--surface-2); border-radius: 2px;
-  position: relative; overflow: hidden;
-}
-.hiw-bar-fill {
-  height: 100%; border-radius: 2px;
-  transition: width 600ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.hiw-bar-fill.vps { background: var(--ink-faint); }
-.hiw-bar-fill.orb { background: var(--accent); }
-.hiw-cost-amt {
+.hiw-stat-val {
   font-family: var(--serif); font-weight: 500;
-  font-size: 1.35rem; color: var(--ink);
-  line-height: 1; white-space: nowrap;
+  font-size: 1.5rem; color: var(--ink); line-height: 1.1;
   letter-spacing: -0.015em;
 }
-.hiw-cost-amt.accent { color: var(--accent); }
-.hiw-cost-amt .c-sign {
-  font-size: 0.62em; color: var(--ink-soft);
-  margin-right: 0.08rem; vertical-align: 0.4em;
+.hiw-stat-val.accent { color: var(--accent); }
+.hiw-stat-lbl {
+  font-size: 0.66rem; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ink-faint);
+  font-weight: 700; margin-top: 0.35rem;
+}
+.hiw-stat-sub {
+  font-size: 0.76rem; color: var(--ink-soft); margin-top: 0.35rem;
 }
 
 .hiw-footer {
@@ -750,26 +735,26 @@ footer .right { font-size: 0.72rem; color: var(--ink-faint); max-width: 440px; t
 
       <div class="hiw-divider"></div>
 
-      <div class="hiw-cost">
-        <div class="hiw-cost-row">
-          <div class="hiw-cost-label">
-            A regular VPS would bill you <span class="hiw-cost-sub">— every second, whether working or not</span>
-          </div>
-          <div class="hiw-cost-bar"><div class="hiw-bar-fill vps" id="hiw-vps-bar"></div></div>
-          <div class="hiw-cost-amt"><span class="c-sign">$</span><span id="hiw-vps-amt">—</span></div>
+      <div class="hiw-stats">
+        <div class="hiw-stat">
+          <div class="hiw-stat-val" id="hiw-stat-session">—</div>
+          <div class="hiw-stat-lbl">session length</div>
+          <div class="hiw-stat-sub">wall clock since first run</div>
         </div>
-        <div class="hiw-cost-row">
-          <div class="hiw-cost-label">
-            Orb bills only for the work <span class="hiw-cost-sub">— the bright segments above</span>
-          </div>
-          <div class="hiw-cost-bar"><div class="hiw-bar-fill orb" id="hiw-orb-bar"></div></div>
-          <div class="hiw-cost-amt accent"><span class="c-sign">$</span><span id="hiw-orb-amt">—</span></div>
+        <div class="hiw-stat">
+          <div class="hiw-stat-val" id="hiw-stat-inrun">—</div>
+          <div class="hiw-stat-lbl">time in Claude runs</div>
+          <div class="hiw-stat-sub" id="hiw-stat-inrun-sub">from agent log</div>
+        </div>
+        <div class="hiw-stat">
+          <div class="hiw-stat-val" id="hiw-stat-cycles">—</div>
+          <div class="hiw-stat-lbl">checkpoint cycles</div>
+          <div class="hiw-stat-sub">Orb froze / woke the container (30-day total)</div>
         </div>
       </div>
 
       <div class="hiw-footer">
-        <span>Same agent · same code · same speed</span>
-        <span class="accent" id="hiw-punchline">Same per-hour rate, different meter</span>
+        <span>Orb's billing is per-computer but only exposed org-wide, so we don't claim a session-level $ figure — the checkpoint count is what Orb reports and it's real.</span>
       </div>
     </div>
   </section>
@@ -1193,52 +1178,37 @@ function renderHowItWorks(state, detail) {
   else if (isNowSleeping) { dot.classList.add("idle"); lbl.textContent = "BETWEEN RUNS"; }
   else { dot.classList.add("idle"); lbl.textContent = (agentState || "—").toUpperCase(); }
 
-  // Real working time = sum of interval durations
+  // Real in-run time from this session's event log
   let workingMsTotal = 0;
   for (const iv of intervals) workingMsTotal += (iv.to - iv.from);
   const workingHours = workingMsTotal / 3_600_000;
 
-  // Human-readable breakdown so the user can verify the bar at a glance
-  const workPct = Math.round((workingHours / wallHours) * 100);
   function fmtHm(h) {
-    const m = Math.round(h * 60);
-    if (m < 60) return `${m}m`;
-    return `${Math.floor(m/60)}h ${m%60}m`;
+    const totalMin = Math.round(h * 60);
+    if (totalMin < 60) return `${totalMin} m`;
+    return `${Math.floor(totalMin/60)} h ${totalMin%60} m`;
   }
-  $("hiw-fraction").textContent = `${fmtHm(workingHours)} in runs · ${fmtHm(wallHours - workingHours)} between · ${workPct}%`;
 
-  const vpsCost = wallHours    * runtimeGb * RATE_RUNTIME_USD_PER_GBH;
-  const orbCost = workingHours * runtimeGb * RATE_RUNTIME_USD_PER_GBH;
+  const workPct = Math.round((workingHours / wallHours) * 100);
+  $("hiw-fraction").textContent = `${fmtHm(workingHours)} in runs · ${workPct}%`;
 
-  function fmtCost(v) {
-    if (v < 0.01) return { amt: (v * 100).toFixed(1), sign: "¢" };
-    if (v < 10)   return { amt: v.toFixed(2), sign: "$" };
-    return { amt: v.toFixed(0), sign: "$" };
-  }
-  const vpsFmt = fmtCost(vpsCost);
-  const orbFmt = fmtCost(orbCost);
-  $("hiw-vps-amt").textContent = vpsFmt.amt;
-  $("hiw-orb-amt").textContent = orbFmt.amt;
-  const vpsSignEl = document.querySelector("#hiw-vps-bar").closest(".hiw-cost-row").querySelector(".c-sign");
-  const orbSignEl = document.querySelector("#hiw-orb-bar").closest(".hiw-cost-row").querySelector(".c-sign");
-  if (vpsSignEl) vpsSignEl.textContent = vpsFmt.sign;
-  if (orbSignEl) orbSignEl.textContent = orbFmt.sign;
+  // Verifiable stats, no derived $ numbers we can't defend
+  $("hiw-stat-session").textContent = fmtHm(wallHours);
+  $("hiw-stat-inrun").textContent = fmtHm(workingHours);
+  $("hiw-stat-inrun-sub").textContent =
+    `${intervals.length} complete runs · ${workPct}% of session`;
 
-  const maxCost = Math.max(vpsCost, 0.0001);
-  $("hiw-vps-bar").style.width = "100%";
-  $("hiw-orb-bar").style.width = Math.max(2, (orbCost / maxCost) * 100).toFixed(1) + "%";
+  // checkpoint_cycles is org-wide 30-day total from Orb — we're honest about that.
+  const cycles = (state.usage || {}).checkpoint_cycles;
+  $("hiw-stat-cycles").textContent = cycles != null ? cycles.toLocaleString() : "—";
 
-  // Honest punchline. When savings are tiny (our agent runs near-
-  // constantly), say so rather than fake a "% cheaper" that isn't there.
-  const savingPct = Math.round(100 * (1 - orbCost / (vpsCost || 1)));
+  // Note is always shown now — explains the missing $ figure honestly.
   const note = $("hiw-note");
-  if (savingPct > 20) {
-    $("hiw-punchline").textContent = `Orb is ${savingPct}% cheaper — same rate, less meter`;
-    note.style.display = "none";
+  note.style.display = "";
+  if (workPct > 90) {
+    note.innerHTML = `<strong>This agent runs almost back-to-back.</strong> It starts a new Claude run ~30 seconds after the last one ends, so the bar is mostly orange. Orb can still freeze the container <em>during</em> a run while waiting on LLM responses (that's where the ${cycles || "many"} checkpoint cycles come from) — but Orb only exposes that billing at the account level, so we show the counts above rather than a misleading per-session dollar figure.`;
   } else {
-    $("hiw-punchline").textContent = "Same per-hour rate, different meter";
-    note.style.display = "";
-    note.innerHTML = `<strong>This particular agent</strong> runs almost back-to-back — it starts a new Claude run 30 seconds after the last one ends. Orb checkpoints between runs, but the savings compound most on agents that wait on human input, slow web scrapes, or external APIs. For this workload the bill tracks wall-clock closely.`;
+    note.innerHTML = `Orb freezes the container between runs (and sometimes within a run, while waiting on the LLM) — that's what the ${cycles || "many"} checkpoint cycles above reflect. The bar shows when our Python process thought it was <em>in</em> a run; the actual billed compute is typically less because Orb can also freeze during LLM waits.`;
   }
 }
 
