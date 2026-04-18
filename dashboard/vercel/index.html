@@ -261,7 +261,7 @@ header .live {
   font-style: italic;
 }
 
-/* molecule canvas */
+/* molecule rendering (RDKit SVG) */
 .exp-mol {
   width: 100%; height: 130px;
   background: hsl(40, 20%, 99%);
@@ -269,9 +269,19 @@ header .live {
   display: flex; justify-content: center; align-items: center;
   overflow: hidden; position: relative;
 }
-.exp-mol canvas { max-width: 100%; max-height: 100%; }
-.exp-mol .mol-placeholder {
-  font-size: 0.72rem; color: var(--ink-faint); text-align: center; padding: 1rem;
+.exp-mol svg { max-width: 100%; max-height: 100%; display: block; }
+.exp-mol .mol-fallback {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.72rem; color: var(--ink-soft);
+  padding: 0.8rem 1rem; text-align: center;
+  word-break: break-all; line-height: 1.5;
+  max-width: 100%;
+}
+.exp-mol .mol-loading {
+  width: 14px; height: 14px;
+  border: 1.5px solid var(--line-2);
+  border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 1.2s linear infinite;
 }
 
 /* pipeline dots (12 gates) */
@@ -396,14 +406,14 @@ footer .right { font-size: 0.72rem; color: var(--ink-faint); max-width: 440px; t
 .modal-head .scaffold { color: var(--ink-soft); font-size: 0.85rem; font-style: italic; }
 
 .modal-mol {
-  width: 100%; height: 220px;
+  width: 100%; height: 260px;
   background: hsl(40, 20%, 99%);
   border: 1px solid hsl(30, 15%, 92%); border-radius: 6px;
   margin-bottom: 1.2rem;
   display: flex; justify-content: center; align-items: center;
   overflow: hidden;
 }
-.modal-mol canvas { max-width: 100%; max-height: 100%; }
+.modal-mol svg { max-width: 100%; max-height: 100%; display: block; }
 
 .modal-rows { display: flex; flex-direction: column; gap: 0.1rem; margin-top: 1rem; }
 .modal-row {
@@ -530,10 +540,10 @@ footer .right { font-size: 0.72rem; color: var(--ink-faint); max-width: 440px; t
   </div>
 </div>
 
-<!-- smiles-drawer — lightweight pure-JS SMILES → 2D renderer. Pinned to
-     2.1.7 because 3.x changed the API. Use non-min for clearer errors. -->
-<script src="https://cdn.jsdelivr.net/npm/smiles-drawer@2.1.7/dist/smiles-drawer.min.js"
-        onerror="console.error('[dashboard] smiles-drawer CDN load failed')"></script>
+<!-- RDKit MinimalLib (WASM). Industry-standard SMILES → SVG rendering.
+     Ships ~2 MB WASM, cached after first load. -->
+<script src="https://unpkg.com/@rdkit/rdkit@2024.9.4/dist/RDKit_minimal.js"
+        onerror="console.error('[dashboard] RDKit CDN load failed')"></script>
 
 <script>
 /* ──────────────────────────────────────────────────────────
@@ -558,79 +568,89 @@ function fmtDuration(sec) {
   return h >= 24 ? `${Math.floor(h/24)}d ${h%24}h` : `${h}h ${m}m`;
 }
 
-/* SMILES → 2D canvas drawing, fault-tolerant
-   Two-stage strategy:
-     1) Try the v2 parse API (tree callback).
-     2) On failure, try again with Kekulé-normalised fallback (a few
-        common agent outputs use non-canonical features that the parser
-        rejects).
-     3) If still failing, draw a monospace preview of the SMILES so the
-        card isn't blank — at least the chemist/layperson sees the
-        structure encoding. */
-const drawerCache = {};  // keyed by canvas size
-function getDrawer(w, h) {
-  const k = `${w}x${h}`;
-  if (drawerCache[k]) return drawerCache[k];
-  drawerCache[k] = new SmilesDrawer.Drawer({
-    width: w, height: h, bondThickness: 1.0, bondLength: 14,
-    atomVisualization: "default", isomeric: false,
-    terminalCarbons: false, padding: 10, compactDrawing: false,
-  });
-  return drawerCache[k];
+/* ───────────────────────────────────────────────────────────
+   RDKit-based SMILES → SVG rendering.
+   Module loads async; we cache its ready state and re-render once ready.
+   ─────────────────────────────────────────────────────────── */
+let RDKitModule = null;
+let RDKitReady = false;
+let RDKitFailed = false;
+const pendingContainers = new Set();
+
+if (typeof window !== "undefined" && typeof window.initRDKitModule === "function") {
+  window.initRDKitModule()
+    .then((m) => {
+      RDKitModule = m;
+      RDKitReady = true;
+      // Re-render any containers that were waiting
+      pendingContainers.forEach(c => {
+        const smi = c.getAttribute("data-smiles");
+        if (smi) drawMolInto(c, smi, c.getAttribute("data-w") || 280, c.getAttribute("data-h") || 130);
+      });
+      pendingContainers.clear();
+    })
+    .catch((err) => {
+      console.error("[dashboard] RDKit init failed:", err);
+      RDKitFailed = true;
+      pendingContainers.forEach(c => fallbackText(c, c.getAttribute("data-smiles")));
+      pendingContainers.clear();
+    });
+} else {
+  // The script tag's onerror catches real CDN failures; this branch hits
+  // if initRDKitModule isn't defined for some other reason (rare).
+  setTimeout(() => { if (!RDKitReady) RDKitFailed = true; }, 8000);
 }
-function drawFallback(canvas, smiles, label) {
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "hsl(20, 6%, 38%)";
-  ctx.font = "10px 'JetBrains Mono', ui-monospace, monospace";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  // word-wrap the SMILES string across multiple lines
+
+function fallbackText(container, smiles) {
   const s = String(smiles || "");
-  const maxChars = Math.floor((canvas.width - 24) / 6.2);
-  const lines = [];
-  for (let i = 0; i < s.length; i += maxChars) lines.push(s.slice(i, i + maxChars));
-  const total = (label ? 1 : 0) + lines.length;
-  const lineH = 14;
-  const startY = canvas.height/2 - (total * lineH)/2 + lineH/2;
-  if (label) {
-    ctx.fillStyle = "hsl(20, 4%, 58%)";
-    ctx.font = "italic 10px 'Lato', sans-serif";
-    ctx.fillText(label, canvas.width/2, startY);
-  }
-  ctx.fillStyle = "hsl(20, 6%, 30%)";
-  ctx.font = "11px 'JetBrains Mono', ui-monospace, monospace";
-  lines.forEach((ln, i) => {
-    ctx.fillText(ln, canvas.width/2, startY + (label?1:0)*lineH + i*lineH);
-  });
+  container.innerHTML = `<div class="mol-fallback">${escape(s) || "(no structure)"}</div>`;
 }
-function drawMol(canvas, smiles) {
-  if (!canvas) return;
-  if (typeof SmilesDrawer === "undefined") {
-    drawFallback(canvas, smiles, "renderer loading…");
+function fallbackLoading(container) {
+  container.innerHTML = `<div class="mol-loading"></div>`;
+}
+
+function drawMolInto(container, smiles, w = 280, h = 130) {
+  if (!container) return;
+  if (!smiles) { fallbackText(container, ""); return; }
+
+  if (RDKitFailed) { fallbackText(container, smiles); return; }
+  if (!RDKitReady) {
+    fallbackLoading(container);
+    container.setAttribute("data-smiles", smiles);
+    container.setAttribute("data-w", w);
+    container.setAttribute("data-h", h);
+    pendingContainers.add(container);
     return;
   }
-  if (!smiles) { drawFallback(canvas, "", "no structure"); return; }
 
-  const drawer = getDrawer(canvas.width, canvas.height);
+  // RDKit is ready — render SVG
   try {
-    SmilesDrawer.parse(smiles,
-      (tree) => {
-        try { drawer.draw(tree, canvas, "light"); }
-        catch (err) {
-          console.warn("[mol] draw failed for", smiles, err);
-          drawFallback(canvas, smiles, null);
-        }
-      },
-      (err) => {
-        // parse failure — show SMILES text as fallback
-        console.warn("[mol] parse failed for", smiles, err);
-        drawFallback(canvas, smiles, null);
+    const mol = RDKitModule.get_mol(smiles);
+    if (!mol) { fallbackText(container, smiles); return; }
+    try {
+      const drawOpts = JSON.stringify({
+        width: w, height: h,
+        bondLineWidth: 1.3,
+        backgroundColour: [0, 0, 0, 0],  // transparent
+        clearBackground: false,
+        atomLabelFontSize: 14,
+        minFontSize: 10,
+      });
+      const svg = mol.get_svg_with_highlights(drawOpts);
+      if (svg && svg.length > 100) {
+        container.innerHTML = svg;
+      } else {
+        fallbackText(container, smiles);
       }
-    );
+    } catch (err) {
+      console.warn("[mol] svg draw failed:", smiles, err);
+      fallbackText(container, smiles);
+    } finally {
+      mol.delete();
+    }
   } catch (err) {
-    console.warn("[mol] sync throw for", smiles, err);
-    drawFallback(canvas, smiles, null);
+    console.warn("[mol] get_mol failed:", smiles, err);
+    fallbackText(container, smiles);
   }
 }
 
@@ -785,9 +805,7 @@ function renderExperiments(list) {
         </div>
         <div class="exp-title">${escape(c.name || c.candidate_id || "—")}</div>
         ${c.scaffold_class ? `<div class="exp-scaffold">${escape(c.scaffold_class)}</div>` : ""}
-        <div class="exp-mol">
-          <canvas class="mol-canvas" data-smiles="${escape(c.smiles || "")}" width="280" height="130"></canvas>
-        </div>
+        <div class="exp-mol mol-container" data-smiles="${escape(c.smiles || "")}" data-w="280" data-h="130"></div>
         <div class="exp-pipeline">${pills}</div>
         <div class="exp-outcome">
           <span class="badge ${statusLabel}">${statusLabel === "running" ? "○ running" : statusLabel === "passed" ? "✓ passed" : "✕ failed"}</span>
@@ -797,11 +815,12 @@ function renderExperiments(list) {
     `;
   }).join("");
 
-  // Draw molecules on the card canvases
-  document.querySelectorAll(".exp-card").forEach(card => {
-    const cvs = card.querySelector(".mol-canvas");
-    const smi = cvs.getAttribute("data-smiles");
-    if (smi) drawMol(cvs, smi);
+  // Render molecules into each card (SVG via RDKit)
+  document.querySelectorAll(".exp-card .mol-container").forEach(c => {
+    const smi = c.getAttribute("data-smiles");
+    const w = parseInt(c.getAttribute("data-w") || "280", 10);
+    const h = parseInt(c.getAttribute("data-h") || "130", 10);
+    drawMolInto(c, smi, w, h);
   });
 
   // Card click opens modal
@@ -844,9 +863,7 @@ function openModal(c, expNum) {
       ${c.scaffold_class ? `<div class="scaffold">${escape(c.scaffold_class)}</div>` : ""}
     </div>
 
-    <div class="modal-mol">
-      <canvas class="modal-mol-canvas" data-smiles="${escape(c.smiles || "")}" width="560" height="220"></canvas>
-    </div>
+    <div class="modal-mol mol-container" data-smiles="${escape(c.smiles || "")}" data-w="580" data-h="260"></div>
 
     <div class="section-label" style="margin-top:0.4rem;margin-bottom:0.3rem;">pipeline · ${c.passed_gates || 0} of ${c.total_gates || 12} filters ${c.status === "failed" ? "before failure" : c.status === "passed" ? "passed" : "so far"}</div>
     <div class="modal-gates">${pills}</div>
@@ -863,8 +880,8 @@ function openModal(c, expNum) {
   $("modal-backdrop").classList.add("open");
   $("modal-backdrop").setAttribute("aria-hidden", "false");
 
-  const cvs = document.querySelector(".modal-mol-canvas");
-  if (cvs && c.smiles) drawMol(cvs, c.smiles);
+  const mc = $("modal-content").querySelector(".modal-mol.mol-container");
+  if (mc && c.smiles) drawMolInto(mc, c.smiles, 580, 260);
 }
 function closeModal() {
   $("modal-backdrop").classList.remove("open");
