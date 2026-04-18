@@ -30,6 +30,7 @@ import re
 import time
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from http.server import BaseHTTPRequestHandler
 
 ORB_BASE = os.environ.get("ORB_BASE_URL", "https://api.orbcloud.dev").rstrip("/")
@@ -38,7 +39,10 @@ ORB_API_KEY = os.environ.get("ORB_API_KEY", "").strip()
 # Short in-process cache so repeated polls from many clients don't hammer Orb.
 # Separate cache keys for overview vs detail-per-id.
 _CACHE: dict[str, dict] = {}
-_CACHE_TTL = 4.0
+_CACHE_TTL = 30.0   # bumped 4s → 30s; agent produces ~1 cand/min, staleness is fine
+
+# Orb file requests issued in parallel.
+_MAX_PARALLEL = 16
 
 
 def _orb_get(path: str, *, text: bool = False, timeout: int = 8):
@@ -222,91 +226,104 @@ def _summary_for_computer(c: dict) -> dict:
     }
 
 
-def _load_candidate_list(cid: str, limit: int = 30) -> list[dict]:
-    """Return candidates with status + pipeline progress so the dashboard
-    can render them as experiments (running / passed / failed with reason)."""
+def _load_one_candidate(cid: str, name: str) -> dict:
+    """Fetch the files needed to derive a candidate's experiment status.
+
+    Issues 2–5 Orb file requests per candidate. Called in parallel via
+    a thread pool to keep total latency bounded by the slowest request
+    rather than the sum.
+    """
+    base = f"agent/code/findings/candidates/{name}"
+    inner = _file_dir(cid, base)
+    artifacts = [f.get("name") for f in inner if f.get("type") == "file"]
+    has = set(artifacts)
+
+    meta = _file_json(cid, f"{base}/candidate.json") or {}
+    scored = _file_json(cid, f"{base}/scored.json") if "scored.json" in has else None
+    docking = _file_json(cid, f"{base}/docking.json") if "docking.json" in has else None
+    redteam = _file_json(cid, f"{base}/redteam.json") if "redteam.json" in has else None
+
+    status = "in_progress"
+    reason = None
+    rigor = None
+    dg = None
+    passed_gates = 1
+    total_gates = 12
+
+    if "validate.json" in has: passed_gates = max(passed_gates, 4)
+    if "docking.json" in has: passed_gates = max(passed_gates, 5)
+    if "docking-secondary.json" in has: passed_gates = max(passed_gates, 6)
+    if "mechanism.json" in has: passed_gates = max(passed_gates, 7)
+    if "admet.json" in has: passed_gates = max(passed_gates, 8)
+    if "novelty.json" in has: passed_gates = max(passed_gates, 9)
+    if "retrosynthesis.json" in has: passed_gates = max(passed_gates, 11)
+    if "redteam.json" in has: passed_gates = max(passed_gates, 12)
+
+    if docking and isinstance(docking, dict):
+        dg = docking.get("best_energy_kcalmol")
+        thr = docking.get("threshold_kcalmol") or -8.0
+        if dg is not None and dg > thr:
+            status = "failed"
+            reason = f"docking too weak — {dg:.2f} kcal/mol (needed ≤ {thr:.1f})"
+
+    if redteam and isinstance(redteam, dict):
+        if redteam.get("substantive_flaw"):
+            status = "failed"
+            flaws = redteam.get("flaws") or []
+            sub = next((f for f in flaws if f.get("substantive")), None)
+            reason = sub.get("description") if sub else "red-team vetoed"
+            if reason and len(reason) > 140:
+                reason = reason[:138] + "…"
+        else:
+            if scored and scored.get("above_threshold"):
+                status = "passed"
+                rigor = scored.get("rigor_score")
+
+    if scored and isinstance(scored, dict):
+        rigor = scored.get("rigor_score")
+        if status == "in_progress" and scored.get("above_threshold") is True:
+            status = "passed"
+        elif status == "in_progress" and scored.get("veto_applied"):
+            status = "failed"
+            reason = scored.get("veto_reason") or "vetoed by pipeline"
+
+    return {
+        "candidate_id": meta.get("candidate_id") or name,
+        "name": meta.get("name"),
+        "designed_at": meta.get("designed_at"),
+        "smiles": meta.get("smiles"),
+        "scaffold_class": (meta.get("design_rationale") or {}).get("scaffold_class"),
+        "status": status,
+        "reason": reason,
+        "rigor_score": rigor,
+        "docking_dg": dg,
+        "passed_gates": passed_gates,
+        "total_gates": total_gates,
+    }
+
+
+def _load_candidate_list(cid: str, limit: int = 18) -> list[dict]:
+    """Parallelised candidate fetch. Issues up to _MAX_PARALLEL simultaneous
+    Orb file requests so total latency is bounded by the slowest request."""
     dirs = [
         f for f in _file_dir(cid, "agent/code/findings/candidates")
         if f.get("type") == "directory" and f.get("name") not in (".", "..", ".gitkeep")
     ]
-    out: list[dict] = []
-    for d in sorted(dirs, key=lambda x: x.get("name", ""), reverse=True)[:limit]:
-        name = d["name"]
-        base = f"agent/code/findings/candidates/{name}"
-        # List per-candidate artifacts
-        inner = _file_dir(cid, base)
-        artifacts = [f.get("name") for f in inner if f.get("type") == "file"]
-        has = set(artifacts)
+    names = [d["name"] for d in sorted(dirs, key=lambda x: x.get("name", ""), reverse=True)[:limit]]
 
-        meta = _file_json(cid, f"{base}/candidate.json") or {}
-        scored = _file_json(cid, f"{base}/scored.json") if "scored.json" in has else None
-        docking = _file_json(cid, f"{base}/docking.json") if "docking.json" in has else None
-        redteam = _file_json(cid, f"{base}/redteam.json") if "redteam.json" in has else None
+    if not names:
+        return []
 
-        # Derive outcome
-        status = "in_progress"
-        reason = None
-        rigor = None
-        dg = None
-        passed_gates = 1  # candidate.json at minimum
-        total_gates = 12
-
-        if "validate.json" in has: passed_gates = max(passed_gates, 4)
-        if "docking.json" in has: passed_gates = max(passed_gates, 5)
-        if "docking-secondary.json" in has: passed_gates = max(passed_gates, 6)
-        if "mechanism.json" in has: passed_gates = max(passed_gates, 7)
-        if "admet.json" in has: passed_gates = max(passed_gates, 8)
-        if "novelty.json" in has: passed_gates = max(passed_gates, 9)
-        if "retrosynthesis.json" in has: passed_gates = max(passed_gates, 11)
-        if "redteam.json" in has: passed_gates = max(passed_gates, 12)
-
-        if docking and isinstance(docking, dict):
-            dg = docking.get("best_energy_kcalmol")
-            thr = docking.get("threshold_kcalmol") or -8.0
-            if dg is not None and dg > thr:
-                status = "failed"
-                reason = f"docking too weak — {dg:.2f} kcal/mol (needed ≤ {thr:.1f})"
-
-        if redteam and isinstance(redteam, dict):
-            if redteam.get("substantive_flaw"):
-                status = "failed"
-                flaws = redteam.get("flaws") or []
-                sub = next((f for f in flaws if f.get("substantive")), None)
-                if sub:
-                    reason = sub.get("description", "red-team vetoed")
-                    if len(reason) > 140:
-                        reason = reason[:138] + "…"
-                else:
-                    reason = "red-team vetoed"
-            else:
-                # passed red-team — if scored ≥ threshold, it's a pass
-                if scored and scored.get("above_threshold"):
-                    status = "passed"
-                    rigor = scored.get("rigor_score")
-
-        if scored and isinstance(scored, dict):
-            rigor = scored.get("rigor_score")
-            if status == "in_progress" and scored.get("above_threshold") is True:
-                status = "passed"
-            elif status == "in_progress" and scored.get("veto_applied"):
-                status = "failed"
-                reason = scored.get("veto_reason") or "vetoed by pipeline"
-
-        out.append({
-            "candidate_id": meta.get("candidate_id") or name,
-            "name": meta.get("name"),
-            "designed_at": meta.get("designed_at"),
-            "smiles": meta.get("smiles"),
-            "scaffold_class": (meta.get("design_rationale") or {}).get("scaffold_class"),
-            "status": status,
-            "reason": reason,
-            "rigor_score": rigor,
-            "docking_dg": dg,
-            "passed_gates": passed_gates,
-            "total_gates": total_gates,
-            "artifacts": sorted(artifacts),
-        })
-    return out
+    results: list[dict | None] = [None] * len(names)
+    with ThreadPoolExecutor(max_workers=_MAX_PARALLEL) as pool:
+        futures = {pool.submit(_load_one_candidate, cid, n): i for i, n in enumerate(names)}
+        for fut in as_completed(futures):
+            i = futures[fut]
+            try:
+                results[i] = fut.result()
+            except Exception:
+                results[i] = {"candidate_id": names[i], "status": "in_progress"}
+    return [r for r in results if r is not None]
 
 
 def _detail_for_computer(cid: str) -> dict:

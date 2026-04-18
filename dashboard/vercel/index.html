@@ -556,9 +556,10 @@ footer .right { font-size: 0.72rem; color: var(--ink-faint); max-width: 440px; t
 </div>
 
 <!-- RDKit MinimalLib (WASM). Industry-standard SMILES → SVG rendering.
-     Ships ~2 MB WASM, cached after first load. -->
-<script src="https://unpkg.com/@rdkit/rdkit@2024.9.4/dist/RDKit_minimal.js"
-        onerror="console.error('[dashboard] RDKit CDN load failed')"></script>
+     Version 2024.9.4 returns 404 on unpkg — pinning to a known-good
+     2025.3.x build. Ships ~2 MB WASM, cached indefinitely after first load. -->
+<script src="https://unpkg.com/@rdkit/rdkit@2025.3.4-1.0.0/dist/RDKit_minimal.js"
+        onerror="console.error('[dashboard] RDKit CDN load failed'); window.__RDKIT_CDN_FAILED__ = true;"></script>
 
 <script>
 /* ──────────────────────────────────────────────────────────
