@@ -39,10 +39,8 @@ ORB_API_KEY = os.environ.get("ORB_API_KEY", "").strip()
 # Short in-process cache so repeated polls from many clients don't hammer Orb.
 # Separate cache keys for overview vs detail-per-id.
 _CACHE: dict[str, dict] = {}
-_CACHE_TTL = 30.0   # bumped 4s → 30s; agent produces ~1 cand/min, staleness is fine
-
-# Orb file requests issued in parallel.
-_MAX_PARALLEL = 16
+_CACHE_TTL = 60.0   # 60 s staleness is invisible on the dashboard and halves Orb load
+_MAX_PARALLEL = 32  # Vercel function allows plenty of threads; bottleneck is Orb IO
 
 
 def _orb_get(path: str, *, text: bool = False, timeout: int = 8):

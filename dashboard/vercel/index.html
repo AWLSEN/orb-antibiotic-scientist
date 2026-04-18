@@ -76,6 +76,82 @@ header .live {
   0%, 100% { opacity: 1; } 50% { opacity: 0.4; }
 }
 
+/* ── TARGET PROTEIN (3D hero) ───────────────────────────── */
+.target-section {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  margin-bottom: 1.6rem;
+  overflow: hidden;
+  position: relative;
+}
+.target-body {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 0;
+  min-height: 340px;
+}
+@media (max-width: 800px) {
+  .target-body { grid-template-columns: 1fr; min-height: auto; }
+  .target-viewer-wrap { min-height: 300px; }
+}
+.target-copy {
+  padding: 2rem 2.2rem;
+  display: flex; flex-direction: column; justify-content: center;
+}
+.target-copy .eyebrow {
+  font-size: 0.66rem; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+.target-title {
+  font-family: var(--serif); font-weight: 500;
+  font-size: clamp(1.4rem, 2.6vw, 1.9rem); line-height: 1.15;
+  letter-spacing: -0.015em; color: var(--ink);
+  margin-bottom: 0.9rem;
+}
+.target-title em { font-style: italic; color: var(--accent); font-weight: 500; }
+.target-desc {
+  font-size: 0.94rem; line-height: 1.55; color: var(--ink-soft);
+  margin-bottom: 1.2rem; max-width: 460px;
+}
+.target-meta {
+  display: flex; flex-wrap: wrap; gap: 1.2rem;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.74rem; color: var(--ink-soft);
+  padding-top: 0.9rem; border-top: 1px solid var(--line);
+}
+.target-meta strong { color: var(--ink); font-weight: 700; margin-right: 0.3rem; }
+
+.target-viewer-wrap {
+  position: relative;
+  background: linear-gradient(135deg, hsl(40, 20%, 98%) 0%, hsl(30, 15%, 94%) 100%);
+  border-left: 1px solid var(--line);
+  overflow: hidden;
+}
+@media (max-width: 800px) { .target-viewer-wrap { border-left: none; border-top: 1px solid var(--line); } }
+.target-viewer {
+  position: absolute; inset: 0;
+}
+.target-viewer canvas { display: block !important; }
+
+.target-loading {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.7rem; color: var(--ink-soft);
+  font-size: 0.82rem; font-family: ui-monospace, Menlo, monospace;
+  pointer-events: none;
+}
+.target-loading.hidden { display: none; }
+
+.target-viewer-label {
+  position: absolute; bottom: 0.6rem; left: 0.9rem;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.66rem; color: var(--ink-faint);
+  letter-spacing: 0.08em; pointer-events: none;
+  z-index: 5;
+}
+
 /* ── STATUS STRIP (replaces hero card) ──────────────────── */
 .status-strip {
   display: grid;
@@ -474,6 +550,31 @@ footer .right { font-size: 0.72rem; color: var(--ink-faint); max-width: 440px; t
     </div>
   </header>
 
+  <!-- TARGET PROTEIN (3D) -->
+  <section class="target-section">
+    <div class="target-body">
+      <div class="target-copy">
+        <div class="eyebrow">the target</div>
+        <h2 class="target-title">Staphylococcus aureus<br><em>DNA gyrase B</em></h2>
+        <p class="target-desc">
+          This is the bacterial enzyme the AI is attacking. It's what the MRSA superbug uses to replicate its DNA — block it, and the bacteria can't grow. Every molecule below is a proposal for something that fits into this protein's ATP pocket.
+        </p>
+        <div class="target-meta">
+          <span><strong>PDB</strong> 4URL</span>
+          <span><strong>catalytic site</strong> Asn46 · Glu50 · Asp73 · Arg76</span>
+        </div>
+      </div>
+      <div class="target-viewer-wrap">
+        <div class="target-viewer" id="target-viewer"></div>
+        <div class="target-loading" id="target-loading">
+          <div class="mol-loading"></div>
+          <div>loading structure…</div>
+        </div>
+        <div class="target-viewer-label">3D · drag to rotate · scroll to zoom</div>
+      </div>
+    </div>
+  </section>
+
   <!-- STATUS STRIP -->
   <section class="status-strip">
     <div class="status-orb" id="status-orb" data-state="asleep">
@@ -555,13 +656,66 @@ footer .right { font-size: 0.72rem; color: var(--ink-faint); max-width: 440px; t
   </div>
 </div>
 
-<!-- RDKit MinimalLib (WASM). Industry-standard SMILES → SVG rendering.
-     Version 2024.9.4 returns 404 on unpkg — pinning to a known-good
-     2025.3.x build. Ships ~2 MB WASM, cached indefinitely after first load. -->
+<!-- RDKit MinimalLib (WASM). 2D SMILES → SVG rendering for candidate cards. -->
 <script src="https://unpkg.com/@rdkit/rdkit@2025.3.4-1.0.0/dist/RDKit_minimal.js"
         onerror="console.error('[dashboard] RDKit CDN load failed'); window.__RDKIT_CDN_FAILED__ = true;"></script>
 
+<!-- 3Dmol.js — WebGL protein/molecule viewer for the GyrB target hero. -->
+<script src="https://3Dmol.csb.pitt.edu/build/3Dmol-min.js"
+        onerror="console.error('[dashboard] 3Dmol CDN load failed')"></script>
+
 <script>
+/* ──────────────────────────────────────────────────────────
+   3D target protein hero (GyrB, PDB 4URL)
+   Uses 3Dmol.js to render a rainbow-cartoon ribbon model.
+   Fires once on page load — independent of the /api/state loop —
+   so the visual lands fast even while the API is still warming up.
+   ────────────────────────────────────────────────────────── */
+(function initTargetViewer() {
+  function setup() {
+    if (typeof $3Dmol === "undefined") {
+      setTimeout(setup, 200);  // poll until the CDN lands
+      return;
+    }
+    const el = document.getElementById("target-viewer");
+    if (!el) return;
+    let viewer;
+    try {
+      viewer = $3Dmol.createViewer(el, {
+        backgroundColor: "white",
+        backgroundAlpha: 0,
+        antialias: true,
+        disableFog: true,
+      });
+    } catch (err) {
+      console.warn("[3dmol] createViewer failed", err);
+      return;
+    }
+
+    // Download PDB 4URL directly from RCSB. doAssembly: true assembles the
+    // biological unit (GyrB is a dimer in some forms but 4URL is chain A).
+    $3Dmol.download("pdb:4URL", viewer, { multimodel: false, frames: false }, function() {
+      viewer.setStyle({}, { cartoon: { color: "spectrum", thickness: 0.5, opacity: 0.98 } });
+      // highlight catalytic residues in stick form
+      viewer.setStyle({ resi: [46, 50, 73, 76], chain: "A" },
+        { cartoon: { color: "spectrum" },
+          stick: { colorscheme: "greenCarbon", radius: 0.18 } });
+      viewer.zoomTo();
+      viewer.zoom(1.1);
+      viewer.spin("y", 0.3);
+      viewer.render();
+      // Hide the loading spinner once the first frame is drawn
+      const ld = document.getElementById("target-loading");
+      if (ld) ld.classList.add("hidden");
+    });
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", setup);
+  } else {
+    setup();
+  }
+})();
+
 /* ──────────────────────────────────────────────────────────
    helpers
    ────────────────────────────────────────────────────────── */
