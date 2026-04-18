@@ -333,6 +333,21 @@ header .live {
   border-radius: 4px;
   grid-column: 1 / -1;
 }
+
+.load-more-btn {
+  display: block; margin: 0.4rem auto 0;
+  padding: 0.6rem 1.4rem;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-family: var(--sans); font-size: 0.84rem;
+  color: var(--ink); cursor: pointer;
+  transition: all 150ms;
+}
+.load-more-btn:hover {
+  background: var(--surface);
+  border-color: var(--line-2);
+}
 .empty-experiments::before {
   content: ''; display: block; width: 16px; height: 16px;
   margin: 0 auto 0.7rem;
@@ -569,61 +584,79 @@ function fmtDuration(sec) {
 }
 
 /* ───────────────────────────────────────────────────────────
-   RDKit-based SMILES → SVG rendering.
-   Module loads async; we cache its ready state and re-render once ready.
+   RDKit renderer — with aggressive caching + lazy rendering.
+
+   Optimizations applied after 'takes 1 min to load' feedback:
+     1. SVG cache keyed by `${smiles}:${w}x${h}` so each unique
+        molecule is rendered ONCE per viewport. Cross-poll survival.
+     2. IntersectionObserver — cards below the fold don't draw until
+        the user scrolls them into view.
+     3. Containers remember their last-rendered SMILES; re-polling
+        the API does NOT redraw unchanged cards. The render loop
+        reuses DOM wherever possible instead of wiping innerHTML.
+     4. RDKit loads async; any container that becomes visible before
+        the module is ready is queued and rendered on init.
    ─────────────────────────────────────────────────────────── */
+
 let RDKitModule = null;
 let RDKitReady = false;
 let RDKitFailed = false;
 const pendingContainers = new Set();
+const svgCache = new Map();   // key = `${smi}:${w}x${h}` → svg string
 
 if (typeof window !== "undefined" && typeof window.initRDKitModule === "function") {
   window.initRDKitModule()
     .then((m) => {
-      RDKitModule = m;
-      RDKitReady = true;
-      // Re-render any containers that were waiting
+      RDKitModule = m; RDKitReady = true;
       pendingContainers.forEach(c => {
-        const smi = c.getAttribute("data-smiles");
-        if (smi) drawMolInto(c, smi, c.getAttribute("data-w") || 280, c.getAttribute("data-h") || 130);
+        const smi = c.dataset.smiles;
+        if (smi) drawMolInto(c, smi, +c.dataset.w || 280, +c.dataset.h || 130);
       });
       pendingContainers.clear();
     })
     .catch((err) => {
       console.error("[dashboard] RDKit init failed:", err);
       RDKitFailed = true;
-      pendingContainers.forEach(c => fallbackText(c, c.getAttribute("data-smiles")));
+      pendingContainers.forEach(c => fallbackText(c, c.dataset.smiles));
       pendingContainers.clear();
     });
 } else {
-  // The script tag's onerror catches real CDN failures; this branch hits
-  // if initRDKitModule isn't defined for some other reason (rare).
   setTimeout(() => { if (!RDKitReady) RDKitFailed = true; }, 8000);
 }
 
 function fallbackText(container, smiles) {
   const s = String(smiles || "");
   container.innerHTML = `<div class="mol-fallback">${escape(s) || "(no structure)"}</div>`;
+  container.dataset.rendered = smiles || "";
 }
 function fallbackLoading(container) {
   container.innerHTML = `<div class="mol-loading"></div>`;
 }
 
+/** Render a molecule into the container, using cache when possible.
+ *  Returns synchronously but no-op if RDKit isn't ready (queued). */
 function drawMolInto(container, smiles, w = 280, h = 130) {
-  if (!container) return;
-  if (!smiles) { fallbackText(container, ""); return; }
+  if (!container || !smiles) { if (container) fallbackText(container, ""); return; }
+
+  // Already rendered the same SMILES → skip
+  if (container.dataset.rendered === smiles) return;
+
+  const cacheKey = `${smiles}:${w}x${h}`;
+  if (svgCache.has(cacheKey)) {
+    container.innerHTML = svgCache.get(cacheKey);
+    container.dataset.rendered = smiles;
+    return;
+  }
 
   if (RDKitFailed) { fallbackText(container, smiles); return; }
   if (!RDKitReady) {
     fallbackLoading(container);
-    container.setAttribute("data-smiles", smiles);
-    container.setAttribute("data-w", w);
-    container.setAttribute("data-h", h);
+    container.dataset.smiles = smiles;
+    container.dataset.w = w; container.dataset.h = h;
     pendingContainers.add(container);
     return;
   }
 
-  // RDKit is ready — render SVG
   try {
     const mol = RDKitModule.get_mol(smiles);
     if (!mol) { fallbackText(container, smiles); return; }
@@ -631,14 +664,16 @@ function drawMolInto(container, smiles, w = 280, h = 130) {
       const drawOpts = JSON.stringify({
         width: w, height: h,
         bondLineWidth: 1.3,
-        backgroundColour: [0, 0, 0, 0],  // transparent
+        backgroundColour: [0, 0, 0, 0],
         clearBackground: false,
         atomLabelFontSize: 14,
         minFontSize: 10,
       });
       const svg = mol.get_svg_with_highlights(drawOpts);
       if (svg && svg.length > 100) {
+        svgCache.set(cacheKey, svg);
         container.innerHTML = svg;
+        container.dataset.rendered = smiles;
       } else {
         fallbackText(container, smiles);
       }
@@ -651,6 +686,29 @@ function drawMolInto(container, smiles, w = 280, h = 130) {
   } catch (err) {
     console.warn("[mol] get_mol failed:", smiles, err);
     fallbackText(container, smiles);
+  }
+}
+
+/* ── IntersectionObserver for lazy rendering ──────────── */
+const molObserver = ("IntersectionObserver" in window) ? new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (entry.isIntersecting) {
+      const c = entry.target;
+      const smi = c.dataset.smiles;
+      if (smi && c.dataset.rendered !== smi) {
+        drawMolInto(c, smi, +c.dataset.w || 280, +c.dataset.h || 130);
+      }
+      // Stop watching once rendered (or attempted)
+      molObserver.unobserve(c);
+    }
+  }
+}, { rootMargin: "200px 0px", threshold: 0.01 }) : null;
+
+function observeMol(container) {
+  if (molObserver) { molObserver.observe(container); }
+  else if (container.dataset.smiles) {
+    drawMolInto(container, container.dataset.smiles,
+      +container.dataset.w || 280, +container.dataset.h || 130);
   }
 }
 
@@ -770,67 +828,125 @@ function reasonFriendly(reason) {
   return escape(reason);
 }
 
+/* ──────────────────────────────────────────────────────────
+   experiments rendering — diff by candidate_id, upsert-only.
+   Keeps DOM intact across polls so RDKit doesn't re-render.
+   ────────────────────────────────────────────────────────── */
+const PAGE_SIZE = 12;        // show N cards initially
+let currentList = [];        // full list from server
+let visibleCount = PAGE_SIZE;
+const cardNodes = new Map(); // candidate_id → card element
+
+function cardHtml(c, expNum) {
+  const statusLabel = c.status === "passed" ? "passed"
+                    : c.status === "failed" ? "failed"
+                    : "running";
+  const pills = Array.from({ length: c.total_gates || 12 }).map((_, j) => {
+    if (c.status === "failed" && j === (c.passed_gates || 0)) return '<div class="exp-pipe-dot fail"></div>';
+    if (j < (c.passed_gates || 0)) return '<div class="exp-pipe-dot done"></div>';
+    if (c.status === "running" && j === (c.passed_gates || 0)) return '<div class="exp-pipe-dot running"></div>';
+    return '<div class="exp-pipe-dot"></div>';
+  }).join("");
+  const reason = c.status === "failed"
+    ? reasonFriendly(c.reason)
+    : (c.status === "passed"
+        ? `<strong style="color: var(--good)">saved to shortlist</strong> — rigor ${(c.rigor_score||0).toFixed(2)}`
+        : escape(reasonCopy(c)));
+  return `
+    <div class="exp-head">
+      <span class="exp-num">Experiment ${String(expNum).padStart(2, "0")}</span>
+      <span class="exp-ago">${c.designed_at ? fmtAgo(c.designed_at) : ""}</span>
+    </div>
+    <div class="exp-title">${escape(c.name || c.candidate_id || "—")}</div>
+    ${c.scaffold_class ? `<div class="exp-scaffold">${escape(c.scaffold_class)}</div>` : ""}
+    <div class="exp-mol mol-container" data-smiles="${escape(c.smiles || "")}" data-w="280" data-h="130"></div>
+    <div class="exp-pipeline">${pills}</div>
+    <div class="exp-outcome">
+      <span class="badge ${statusLabel}">${statusLabel === "running" ? "○ running" : statusLabel === "passed" ? "✓ passed" : "✕ failed"}</span>
+    </div>
+    <div class="exp-reason">${reason}</div>
+  `;
+}
+
 function renderExperiments(list) {
+  currentList = list || [];
   const el = $("experiments");
-  if (!list || !list.length) {
+  if (!currentList.length) {
     el.innerHTML = `<div class="empty-experiments">loading experiments…</div>`;
+    cardNodes.clear();
     return;
   }
 
-  // infer experiment number from candidate_id or order
-  const total = list.length;
-  el.innerHTML = list.map((c, i) => {
-    const expNum = list.length - i; // newest first = highest number
-    const statusLabel =
-      c.status === "passed" ? "passed" :
-      c.status === "failed" ? "failed" : "running";
-    const pills = Array.from({ length: c.total_gates || 12 }).map((_, j) => {
-      if (c.status === "failed" && j === (c.passed_gates || 0)) return '<div class="exp-pipe-dot fail"></div>';
-      if (j < (c.passed_gates || 0)) return '<div class="exp-pipe-dot done"></div>';
-      if (c.status === "running" && j === (c.passed_gates || 0)) return '<div class="exp-pipe-dot running"></div>';
-      return '<div class="exp-pipe-dot"></div>';
-    }).join("");
+  // Paginate: only show the first `visibleCount` cards
+  const slice = currentList.slice(0, visibleCount);
 
-    const reason = c.status === "failed"
-      ? reasonFriendly(c.reason)
-      : (c.status === "passed"
-          ? `<strong style="color: var(--good)">saved to shortlist</strong> — rigor ${(c.rigor_score||0).toFixed(2)}`
-          : escape(reasonCopy(c)));
+  // Build an ordered set of ids we want visible
+  const wantIds = slice.map(c => c.candidate_id);
+  const wantSet = new Set(wantIds);
 
-    return `
-      <div class="exp-card" data-cid="${escape(c.candidate_id)}">
-        <div class="exp-head">
-          <span class="exp-num">Experiment ${String(expNum).padStart(2, "0")}</span>
-          <span class="exp-ago">${c.designed_at ? fmtAgo(c.designed_at) : ""}</span>
-        </div>
-        <div class="exp-title">${escape(c.name || c.candidate_id || "—")}</div>
-        ${c.scaffold_class ? `<div class="exp-scaffold">${escape(c.scaffold_class)}</div>` : ""}
-        <div class="exp-mol mol-container" data-smiles="${escape(c.smiles || "")}" data-w="280" data-h="130"></div>
-        <div class="exp-pipeline">${pills}</div>
-        <div class="exp-outcome">
-          <span class="badge ${statusLabel}">${statusLabel === "running" ? "○ running" : statusLabel === "passed" ? "✓ passed" : "✕ failed"}</span>
-        </div>
-        <div class="exp-reason">${reason}</div>
-      </div>
-    `;
-  }).join("");
+  // Remove cards no longer in the top slice
+  for (const [cid, node] of cardNodes.entries()) {
+    if (!wantSet.has(cid)) {
+      node.remove();
+      cardNodes.delete(cid);
+    }
+  }
 
-  // Render molecules into each card (SVG via RDKit)
-  document.querySelectorAll(".exp-card .mol-container").forEach(c => {
-    const smi = c.getAttribute("data-smiles");
-    const w = parseInt(c.getAttribute("data-w") || "280", 10);
-    const h = parseInt(c.getAttribute("data-h") || "130", 10);
-    drawMolInto(c, smi, w, h);
+  // Upsert each card in wanted order
+  let prev = null;
+  slice.forEach((c, i) => {
+    const expNum = currentList.length - currentList.indexOf(c);
+    let node = cardNodes.get(c.candidate_id);
+    if (!node) {
+      node = document.createElement("div");
+      node.className = "exp-card";
+      node.dataset.cid = c.candidate_id;
+      node.dataset.sig = "";          // signature to detect content changes
+      node.addEventListener("click", () => {
+        const cc = currentList.find(x => x.candidate_id === c.candidate_id) || c;
+        const idx = currentList.findIndex(x => x.candidate_id === c.candidate_id);
+        openModal(cc, currentList.length - idx);
+      });
+      cardNodes.set(c.candidate_id, node);
+    }
+    // Update inner HTML only when the signature changes (status/gates/smiles)
+    const sig = `${c.status}|${c.passed_gates}|${c.smiles}|${c.reason || ""}|${c.rigor_score || ""}`;
+    if (node.dataset.sig !== sig) {
+      node.innerHTML = cardHtml(c, expNum);
+      node.dataset.sig = sig;
+      // Kick off lazy mol rendering
+      const mc = node.querySelector(".mol-container");
+      if (mc) {
+        mc.dataset.smiles = c.smiles || "";
+        mc.dataset.w = 280; mc.dataset.h = 130;
+        observeMol(mc);
+      }
+    }
+    // Reorder: place after `prev`
+    if (prev ? prev.nextElementSibling !== node : el.firstChild !== node) {
+      if (prev) prev.after(node); else el.prepend(node);
+    }
+    prev = node;
   });
 
-  // Card click opens modal
-  document.querySelectorAll(".exp-card").forEach(card => {
-    card.addEventListener("click", () => {
-      const cid = card.getAttribute("data-cid");
-      const c = list.find(x => x.candidate_id === cid);
-      if (c) openModal(c, list.length - list.indexOf(c));
-    });
-  });
+  // Load-more footer
+  let more = $("load-more");
+  if (currentList.length > visibleCount) {
+    if (!more) {
+      more = document.createElement("button");
+      more.id = "load-more";
+      more.className = "load-more-btn";
+      more.onclick = () => {
+        visibleCount += PAGE_SIZE;
+        renderExperiments(currentList);
+      };
+      el.parentElement.appendChild(more);
+    }
+    more.textContent = `Show more (${currentList.length - visibleCount} older experiments)`;
+    more.style.display = "";
+  } else if (more) {
+    more.style.display = "none";
+  }
 }
 
 /* ──────────────────────────────────────────────────────────

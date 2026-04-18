@@ -222,7 +222,7 @@ def _summary_for_computer(c: dict) -> dict:
     }
 
 
-def _load_candidate_list(cid: str, limit: int = 20) -> list[dict]:
+def _load_candidate_list(cid: str, limit: int = 30) -> list[dict]:
     """Return candidates with status + pipeline progress so the dashboard
     can render them as experiments (running / passed / failed with reason)."""
     dirs = [
