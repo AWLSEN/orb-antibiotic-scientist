@@ -3,27 +3,30 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>An AI scientist designing antibiotics · live</title>
-<meta name="description" content="An autonomous AI is designing novel antibiotic candidates for MRSA. It sleeps when idle, wakes up in under a second." />
+<title>The Antibiotic Scientist · live</title>
+<meta name="description" content="An AI scientist running on cloud, designing new medicine for a drug-resistant infection." />
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700;900&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap');
 
 :root {
   --bg:         hsl(40, 15%, 97%);
-  --surface:    hsl(40, 15%, 93%);
-  --surface-2:  hsl(40, 12%, 88%);
-  --line:       hsl(30, 8%, 82%);
-  --line-2:     hsl(30, 8%, 68%);
-  --ink:        hsl(20, 8%, 15%);
+  --surface:    hsl(40, 15%, 94%);
+  --surface-2:  hsl(40, 12%, 90%);
+  --line:       hsl(30, 8%, 84%);
+  --line-2:     hsl(30, 8%, 70%);
+  --ink:        hsl(20, 8%, 14%);
   --ink-soft:   hsl(20, 6%, 38%);
   --ink-faint:  hsl(20, 4%, 58%);
 
-  --accent:     hsl(24, 64%, 44%);   /* warm terracotta — "awake" */
-  --moon:       hsl(220, 12%, 55%);  /* muted slate — "asleep" */
-  --warn:       hsl(32, 80%, 50%);
-  --err:        hsl(0,  55%, 48%);
+  --accent:     hsl(24, 64%, 44%);       /* terracotta — "working" */
+  --accent-bg:  hsl(24, 60%, 93%);
+  --moon:       hsl(220, 12%, 55%);      /* "sleeping" */
+  --moon-bg:    hsl(220, 15%, 92%);
+  --good:       hsl(152, 40%, 40%);      /* passed */
+  --good-bg:    hsl(152, 40%, 94%);
+  --bad:        hsl(0,  55%, 50%);       /* failed */
+  --bad-bg:     hsl(0,  60%, 96%);
 
-  --radius:     2px;
   --sans:       'Lato', ui-sans-serif, system-ui, sans-serif;
   --serif:      'Lora', Georgia, serif;
 }
@@ -31,373 +34,414 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
   background: var(--bg); color: var(--ink);
-  font-family: var(--sans); line-height: 1.6;
+  font-family: var(--sans); line-height: 1.55;
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 body {
-  min-height: 100vh; padding: 3rem 1.6rem 4rem;
+  min-height: 100vh; padding: 2.2rem 1.4rem 4rem;
   display: flex; justify-content: center;
 }
-main { width: 100%; max-width: 960px; }
+main { width: 100%; max-width: 1040px; }
 
-/* ── Header ─────────────────────────────────────────────── */
+/* ── HEADER (compact) ───────────────────────────────────── */
 header {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 3.5rem; flex-wrap: wrap; gap: 1rem;
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 2rem; flex-wrap: wrap; gap: 0.8rem;
 }
 .brand .h {
-  font-family: var(--serif); font-size: 1.35rem; font-weight: 500;
-  color: var(--ink); letter-spacing: -0.01em;
+  font-family: var(--serif); font-size: 1.15rem; font-weight: 500;
+  color: var(--ink); letter-spacing: -0.005em;
 }
 .brand .sub {
-  font-size: 0.86rem; color: var(--ink-soft); margin-top: 0.1rem;
+  font-size: 0.78rem; color: var(--ink-soft); margin-top: 0.05rem;
+  max-width: 520px;
 }
 header .live {
   display: flex; gap: 0.5rem; align-items: center;
-  font-size: 0.82rem; color: var(--ink-soft);
-  padding: 0.35rem 0.8rem;
+  font-size: 0.74rem; color: var(--ink-soft);
+  padding: 0.25rem 0.7rem;
   border: 1px solid var(--line);
   border-radius: 100px;
   background: var(--surface);
 }
 .live-dot {
-  width: 7px; height: 7px; border-radius: 50%;
+  width: 6px; height: 6px; border-radius: 50%;
   background: var(--accent); box-shadow: 0 0 6px var(--accent);
   animation: livepulse 2s ease-in-out infinite;
 }
 .live-dot.idle { background: var(--moon); box-shadow: 0 0 6px var(--moon); }
 .live-dot.off { background: var(--ink-faint); box-shadow: none; animation: none; }
 @keyframes livepulse {
-  0%, 100% { opacity: 1; } 50% { opacity: 0.35; }
+  0%, 100% { opacity: 1; } 50% { opacity: 0.4; }
 }
 
-/* ── Hero statement ─────────────────────────────────────── */
-.hero {
-  margin-bottom: 3.5rem;
-}
-.hero h1 {
-  font-family: var(--serif); font-weight: 500;
-  font-size: clamp(1.9rem, 4.5vw, 2.75rem);
-  line-height: 1.2; letter-spacing: -0.015em;
-  color: var(--ink); max-width: 720px;
-  margin-bottom: 1rem;
-}
-.hero h1 em {
-  font-style: italic; color: var(--accent); font-weight: 500;
-}
-.hero .lede {
-  font-size: 1.05rem; color: var(--ink-soft);
-  max-width: 620px; line-height: 1.6;
-}
-
-/* ── What's it doing now (the centerpiece) ─────────────── */
-.now-card {
-  border: 1px solid var(--line);
-  background: var(--surface);
-  padding: 2.2rem 2.4rem;
-  border-radius: var(--radius);
-  margin-bottom: 3rem;
+/* ── STATUS STRIP (replaces hero card) ──────────────────── */
+.status-strip {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 2rem;
-  align-items: center;
-  position: relative; overflow: hidden;
+  grid-template-columns: auto 1fr auto;
+  gap: 1.6rem; align-items: center;
+  padding: 1.3rem 1.5rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-bottom: 1.2rem;
 }
-@media (max-width: 600px) {
-  .now-card { grid-template-columns: 1fr; text-align: center; padding: 1.8rem 1.4rem; gap: 1.4rem; }
+@media (max-width: 640px) {
+  .status-strip { grid-template-columns: auto 1fr; gap: 1rem; padding: 1rem 1.1rem; }
+  .status-strip .status-cta { grid-column: span 2; text-align: center; margin-top: 0.3rem; }
 }
 
-/* the orb — less aggressive than before */
-.now-orb {
-  width: 140px; height: 140px; position: relative;
-  flex-shrink: 0;
+/* compact orb (64px) */
+.status-orb {
+  width: 64px; height: 64px; position: relative; flex-shrink: 0;
 }
-@media (max-width: 600px) { .now-orb { margin: 0 auto; } }
-.now-orb .core {
-  position: absolute; inset: 14px;
-  border-radius: 50%;
+.status-orb .core {
+  position: absolute; inset: 8px; border-radius: 50%;
   background: radial-gradient(circle at 30% 30%,
-    hsl(40, 18%, 95%) 0%,
-    hsl(40, 15%, 88%) 60%,
-    hsl(40, 12%, 82%) 100%);
+    hsl(40, 18%, 94%) 0%, hsl(40, 15%, 88%) 60%, hsl(40, 12%, 82%) 100%);
   border: 1px solid var(--line-2);
 }
-.now-orb .ring {
-  position: absolute; inset: 0;
-  border: 1px solid var(--line-2);
-  border-radius: 50%;
-  opacity: 0.5;
+.status-orb .ring {
+  position: absolute; inset: 0; border: 1px solid var(--line-2);
+  border-radius: 50%; opacity: 0.5;
 }
-.now-orb[data-state="awake"] .core {
-  background: radial-gradient(circle at 30% 30%,
-    hsl(40, 50%, 92%) 0%,
-    hsl(30, 45%, 85%) 55%,
-    hsl(24, 60%, 76%) 100%);
+.status-orb[data-state="awake"] .core {
+  background: radial-gradient(circle at 30% 30%, hsl(40, 50%, 92%), hsl(24, 60%, 76%));
   border-color: var(--accent);
 }
-.now-orb[data-state="awake"] .ring {
+.status-orb[data-state="awake"] .ring {
   border-color: var(--accent);
   animation: wakeHalo 2.8s ease-in-out infinite;
 }
 @keyframes wakeHalo {
   0%, 100% { transform: scale(1); opacity: 0.35; }
-  50% { transform: scale(1.08); opacity: 0.05; }
+  50% { transform: scale(1.15); opacity: 0.05; }
 }
-.now-orb[data-state="asleep"] .core {
-  background: radial-gradient(circle at 35% 35%,
-    hsl(220, 12%, 82%) 0%,
-    hsl(220, 10%, 76%) 100%);
+.status-orb[data-state="asleep"] .core {
+  background: radial-gradient(circle at 35% 35%, hsl(220,12%,82%), hsl(220,10%,76%));
   border-color: var(--moon);
 }
-.now-orb[data-state="asleep"] .ring {
+.status-orb[data-state="asleep"] .ring {
   border-color: var(--moon);
   animation: sleepBreath 5s ease-in-out infinite;
 }
 @keyframes sleepBreath {
-  0%, 100% { transform: scale(0.94); opacity: 0.25; }
+  0%, 100% { transform: scale(0.94); opacity: 0.3; }
   50%      { transform: scale(1);    opacity: 0.55; }
 }
-.now-orb[data-state="waking"] .core,
-.now-orb[data-state="checkpointing"] .core {
-  background: radial-gradient(circle at 30% 30%, hsl(32, 70%, 88%), hsl(32, 60%, 78%));
-  border-color: var(--warn);
+.status-orb[data-state="waking"] .ring,
+.status-orb[data-state="checkpointing"] .ring {
+  border-color: var(--accent); border-style: dashed;
+  animation: spin 2.4s linear infinite;
 }
-.now-orb[data-state="waking"] .ring,
-.now-orb[data-state="checkpointing"] .ring {
-  border-color: var(--warn);
-  border-style: dashed;
-  animation: spin 2s linear infinite;
-}
-.now-orb[data-state="err"] .core {
-  background: radial-gradient(circle, hsl(0, 40%, 92%), hsl(0, 40%, 85%));
-  border-color: var(--err);
+.status-orb[data-state="err"] .core {
+  background: radial-gradient(circle, hsl(0,40%,92%), hsl(0,40%,85%));
+  border-color: var(--bad);
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.now-copy .state-label {
-  font-size: 0.74rem; letter-spacing: 0.2em;
-  text-transform: uppercase; color: var(--ink-faint);
-  font-weight: 700;
-  margin-bottom: 0.5rem;
+.status-body .pill {
+  display: inline-block;
+  font-size: 0.65rem; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 700;
+  padding: 0.2rem 0.55rem; border: 1px solid var(--line-2);
+  border-radius: 3px; background: var(--surface);
+  margin-bottom: 0.4rem;
 }
-.now-copy .headline {
+.status-body[data-state="awake"] .pill { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
+.status-body[data-state="asleep"] .pill { color: var(--moon); border-color: var(--moon); background: var(--moon-bg); }
+.status-body[data-state="waking"] .pill,
+.status-body[data-state="checkpointing"] .pill { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
+.status-body[data-state="err"] .pill { color: var(--bad); border-color: var(--bad); background: var(--bad-bg); }
+
+.status-body .headline {
   font-family: var(--serif); font-weight: 500;
-  font-size: clamp(1.25rem, 3vw, 1.6rem);
-  line-height: 1.3; color: var(--ink);
-  margin-bottom: 0.8rem;
+  font-size: 1.1rem; color: var(--ink); line-height: 1.35;
+  margin-bottom: 0.25rem;
 }
-.now-copy .headline em { color: var(--accent); font-style: normal; }
-.now-copy .desc {
-  font-size: 0.94rem; color: var(--ink-soft);
-  max-width: 540px;
+.status-body .headline em { font-style: normal; color: var(--accent); }
+.status-body .desc {
+  font-size: 0.84rem; color: var(--ink-soft);
 }
 
-/* ── The story of sleep/wake ────────────────────────────── */
-.story-section { margin-bottom: 3rem; }
-.story-section .eyebrow {
-  font-size: 0.72rem; letter-spacing: 0.18em;
-  text-transform: uppercase; color: var(--ink-faint);
-  font-weight: 700; margin-bottom: 0.8rem;
+.status-cta {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem;
 }
-.story-section h2 {
+.status-cta .stat {
   font-family: var(--serif); font-weight: 500;
-  font-size: 1.5rem; line-height: 1.3;
-  max-width: 640px; margin-bottom: 0.6rem;
+  font-size: 1.6rem; color: var(--ink); line-height: 1;
+  letter-spacing: -0.015em;
 }
-.story-section .blurb {
-  font-size: 0.95rem; color: var(--ink-soft);
-  max-width: 640px; margin-bottom: 1.5rem;
+.status-cta .stat .pulse { color: var(--accent); transition: color 0.6s; }
+.status-cta .stat-sub {
+  font-size: 0.68rem; color: var(--ink-soft);
+  text-transform: uppercase; letter-spacing: 0.12em; font-weight: 700;
 }
+@media (max-width: 640px) { .status-cta { align-items: center; } }
 
-/* Sleep/wake timeline — legible */
-.sw-timeline {
-  display: flex; height: 44px;
+/* ── QUICK METRICS (three small stats row) ──────────────── */
+.metrics {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 0.7rem; margin-bottom: 2.4rem;
+}
+@media (max-width: 640px) { .metrics { grid-template-columns: 1fr; } }
+.metric {
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  overflow: hidden;
   background: var(--surface);
+  padding: 0.85rem 1.1rem;
+  border-radius: 4px;
+}
+.metric .k {
+  font-size: 0.64rem; letter-spacing: 0.15em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 700;
+}
+.metric .v {
+  font-family: var(--serif); font-weight: 500;
+  font-size: 1.4rem; line-height: 1.1; margin-top: 0.2rem;
+  color: var(--ink); letter-spacing: -0.015em;
+}
+.metric .v .unit { font-family: var(--sans); font-size: 0.82rem; color: var(--ink-soft); font-weight: 400; margin-left: 0.2rem; }
+.metric .sub { font-size: 0.76rem; color: var(--ink-soft); margin-top: 0.25rem; }
+
+/* ── EXPERIMENTS SECTION ────────────────────────────────── */
+.section-label {
+  font-size: 0.66rem; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+.section-title {
+  font-family: var(--serif); font-size: 1.3rem; font-weight: 500;
+  color: var(--ink); line-height: 1.3; margin-bottom: 0.3rem;
+}
+.section-sub {
+  font-size: 0.86rem; color: var(--ink-soft);
+  margin-bottom: 1.4rem; max-width: 620px;
+}
+
+.experiments {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 0.9rem;
+  margin-bottom: 3rem;
+}
+
+.exp-card {
+  border: 1px solid var(--line);
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 1.1rem 1.2rem 1rem;
+  display: flex; flex-direction: column; gap: 0.6rem;
+  transition: transform 150ms, border-color 150ms, box-shadow 150ms;
+  cursor: pointer;
   position: relative;
 }
-.sw-block {
-  height: 100%; position: relative;
-  transition: background 300ms;
-}
-.sw-block.awake { background: var(--accent); }
-.sw-block.asleep {
-  background: repeating-linear-gradient(
-    45deg,
-    hsl(220, 10%, 85%) 0px,
-    hsl(220, 10%, 85%) 6px,
-    hsl(220, 10%, 80%) 6px,
-    hsl(220, 10%, 80%) 12px
-  );
-}
-.sw-block.now {
-  background: var(--moon);
-  animation: now-pulse 1.6s ease-in-out infinite;
-}
-@keyframes now-pulse {
-  0%, 100% { opacity: 0.7; } 50% { opacity: 1; }
-}
-.sw-timeline-legend {
-  display: flex; gap: 1.4rem;
-  font-size: 0.82rem; color: var(--ink-soft);
-  margin-top: 0.9rem;
-}
-.sw-timeline-legend .sw {
-  display: inline-block; width: 14px; height: 10px;
-  vertical-align: middle; margin-right: 0.4rem;
-}
-.sw-timeline-legend .sw.awake { background: var(--accent); }
-.sw-timeline-legend .sw.asleep {
-  background: repeating-linear-gradient(
-    45deg, hsl(220, 10%, 85%) 0px, hsl(220, 10%, 85%) 3px,
-    hsl(220, 10%, 80%) 3px, hsl(220, 10%, 80%) 6px);
-}
-.sw-summary {
-  margin-top: 1.2rem; display: flex; gap: 2rem;
-  flex-wrap: wrap;
-  font-size: 0.92rem; color: var(--ink-soft);
-}
-.sw-summary strong {
-  font-family: var(--serif); font-weight: 600; color: var(--ink);
-  font-size: 1.05rem;
+.exp-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-2);
+  box-shadow: 0 2px 8px hsla(20, 10%, 30%, 0.06);
 }
 
-/* ── Stats cards (work done) ────────────────────────────── */
-.stats-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
+.exp-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem;
 }
-@media (max-width: 720px) {
-  .stats-grid { grid-template-columns: 1fr 1fr; }
-  .stats-grid .stat:last-child { grid-column: span 2; }
-}
-.stat {
-  border: 1px solid var(--line);
-  background: var(--surface);
-  padding: 1.4rem 1.5rem 1.5rem;
-  border-radius: var(--radius);
-}
-.stat .eye {
-  font-size: 0.68rem; letter-spacing: 0.18em; text-transform: uppercase;
-  color: var(--ink-faint); font-weight: 700;
-  margin-bottom: 0.8rem;
-}
-.stat .v {
+.exp-num {
   font-family: var(--serif); font-weight: 500;
-  font-size: 2.2rem; line-height: 1.1;
-  color: var(--ink); letter-spacing: -0.015em;
-  transition: color 300ms;
+  font-size: 0.9rem; color: var(--ink-faint);
 }
-.stat .v.pulse { color: var(--accent); }
-.stat .unit {
-  font-family: var(--sans); font-size: 0.9rem;
-  color: var(--ink-soft); margin-left: 0.3rem; font-weight: 400;
+.exp-ago { font-size: 0.72rem; color: var(--ink-soft); }
+
+.exp-title {
+  font-family: var(--serif); font-weight: 500;
+  font-size: 0.98rem; color: var(--ink); line-height: 1.3;
+  margin-top: 0.1rem;
 }
-.stat .sub {
-  font-size: 0.85rem; color: var(--ink-soft); margin-top: 0.6rem;
+.exp-scaffold {
+  font-size: 0.76rem; color: var(--ink-soft);
+  font-style: italic;
 }
 
-/* ── Candidates list (rebranded "recent molecules") ─────── */
-.molecules-list {
-  display: flex; flex-direction: column;
+/* molecule canvas */
+.exp-mol {
+  width: 100%; height: 130px;
+  background: hsl(40, 20%, 99%);
+  border: 1px solid hsl(30, 15%, 92%); border-radius: 4px;
+  display: flex; justify-content: center; align-items: center;
+  overflow: hidden; position: relative;
 }
-.mol-row {
-  display: grid; grid-template-columns: 28px 1fr auto;
-  gap: 1rem; align-items: start;
-  padding: 1rem 0;
-  border-bottom: 1px solid var(--line);
+.exp-mol canvas { max-width: 100%; max-height: 100%; }
+.exp-mol .mol-placeholder {
+  font-size: 0.72rem; color: var(--ink-faint); text-align: center; padding: 1rem;
 }
-.mol-row:last-child { border-bottom: none; }
-.mol-n {
-  font-family: var(--serif); font-size: 0.9rem;
-  color: var(--ink-faint); padding-top: 2px; font-weight: 400;
+
+/* pipeline dots (12 gates) */
+.exp-pipeline {
+  display: flex; gap: 3px; align-items: center;
 }
-.mol-body { min-width: 0; }
-.mol-name {
-  font-family: var(--serif); font-weight: 500;
-  font-size: 1rem; color: var(--ink); line-height: 1.3;
-  margin-bottom: 0.2rem;
+.exp-pipe-dot {
+  flex: 1; height: 3px; background: var(--surface-2);
+  border-radius: 1px;
 }
-.mol-id {
+.exp-pipe-dot.done { background: var(--good); }
+.exp-pipe-dot.fail { background: var(--bad); }
+.exp-pipe-dot.running {
+  background: var(--accent);
+  animation: pipeFlow 1s ease-in-out infinite;
+}
+@keyframes pipeFlow {
+  0%, 100% { opacity: 0.4; } 50% { opacity: 1; }
+}
+
+.exp-outcome {
+  display: flex; align-items: center; gap: 0.4rem;
   font-size: 0.78rem; color: var(--ink-soft);
-  margin-bottom: 0.3rem;
+  padding: 0.35rem 0;
 }
-.mol-smi {
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 0.78rem;
-  color: var(--ink-faint);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 100%;
+.exp-outcome .badge {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  font-size: 0.66rem; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
+  white-space: nowrap;
 }
-.mol-ago {
-  font-size: 0.82rem; color: var(--ink-soft);
-  white-space: nowrap; padding-top: 4px;
-}
+.exp-outcome .badge.running { color: var(--accent); background: var(--accent-bg); border: 1px solid var(--accent); }
+.exp-outcome .badge.passed  { color: var(--good); background: var(--good-bg); border: 1px solid var(--good); }
+.exp-outcome .badge.failed  { color: var(--bad);  background: var(--bad-bg);  border: 1px solid var(--bad); }
 
-.empty-mols {
-  padding: 2rem 1rem; text-align: center;
-  font-size: 0.9rem; color: var(--ink-soft);
+.exp-reason {
+  font-size: 0.78rem; color: var(--ink-soft);
+  margin-top: 0.2rem;
+  line-height: 1.4;
+}
+.exp-reason strong { color: var(--bad); font-weight: 700; }
+
+.empty-experiments {
+  padding: 3rem 1rem; text-align: center;
+  color: var(--ink-soft);
   border: 1px dashed var(--line);
-  border-radius: var(--radius);
+  border-radius: 4px;
+  grid-column: 1 / -1;
 }
-.empty-mols::before {
+.empty-experiments::before {
   content: ''; display: block; width: 16px; height: 16px;
-  margin: 0 auto 0.8rem;
+  margin: 0 auto 0.7rem;
   border: 1.5px solid var(--line-2); border-top-color: var(--accent);
-  border-radius: 50%; animation: spin 1.8s linear infinite;
+  border-radius: 50%; animation: spin 1.6s linear infinite;
 }
 
-/* ── Explainer strip ────────────────────────────────────── */
+/* ── EXPLAIN STRIP ──────────────────────────────────────── */
 .explain {
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 1.6rem 1.8rem;
+  border-radius: 4px;
+  padding: 1.3rem 1.5rem;
   background: var(--surface);
-  margin-bottom: 3rem;
+  margin-bottom: 2rem;
 }
 .explain h3 {
   font-family: var(--serif); font-weight: 500;
-  font-size: 1.15rem; margin-bottom: 0.7rem;
+  font-size: 1rem; margin-bottom: 0.5rem;
 }
-.explain p {
-  font-size: 0.93rem; color: var(--ink-soft); margin-bottom: 0.6rem;
-  max-width: 640px;
-}
+.explain p { font-size: 0.86rem; color: var(--ink-soft); margin-bottom: 0.4rem; }
 .explain p:last-child { margin-bottom: 0; }
 .explain strong { color: var(--ink); font-weight: 700; }
 
-/* ── Footer ─────────────────────────────────────────────── */
+/* ── FOOTER ─────────────────────────────────────────────── */
 footer {
-  margin-top: 4rem; padding-top: 1.6rem;
+  margin-top: 2.5rem; padding-top: 1.4rem;
   border-top: 1px solid var(--line);
-  font-size: 0.82rem; color: var(--ink-soft);
+  font-size: 0.78rem; color: var(--ink-soft);
   display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem;
 }
 footer a { color: var(--ink); text-decoration: none; border-bottom: 1px dotted var(--ink-faint); }
 footer a:hover { border-bottom-color: var(--accent); }
-footer .right { font-size: 0.76rem; color: var(--ink-faint); max-width: 440px; text-align: right; }
+footer .right { font-size: 0.72rem; color: var(--ink-faint); max-width: 440px; text-align: right; }
 
-/* ── Responsive polish ──────────────────────────────────── */
-@media (max-width: 520px) {
-  body { padding: 2rem 1rem; }
-  .hero h1 { font-size: 1.7rem; }
-  .now-card { padding: 1.6rem 1.2rem; }
+/* ── EXPERIMENT DETAIL MODAL ────────────────────────────── */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: hsla(20, 8%, 14%, 0.45);
+  backdrop-filter: blur(3px);
+  display: none; z-index: 100;
+  opacity: 0; transition: opacity 200ms;
 }
+.modal-backdrop.open { display: block; opacity: 1; }
+
+.modal {
+  position: fixed; top: 50%; left: 50%;
+  transform: translate(-50%, -50%) scale(0.96);
+  width: min(640px, 92vw); max-height: 86vh;
+  background: var(--bg); border-radius: 8px;
+  border: 1px solid var(--line-2);
+  box-shadow: 0 20px 60px hsla(20, 10%, 30%, 0.2);
+  padding: 1.8rem 2rem 1.8rem;
+  z-index: 101;
+  overflow-y: auto;
+  opacity: 0; transition: all 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.modal-backdrop.open .modal { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+.modal-close {
+  position: absolute; top: 1rem; right: 1.1rem;
+  background: transparent; border: 1px solid var(--line);
+  color: var(--ink-soft); cursor: pointer; font-family: var(--sans);
+  font-size: 0.74rem; padding: 0.3rem 0.7rem; border-radius: 3px;
+  letter-spacing: 0.04em;
+}
+.modal-close:hover { border-color: var(--line-2); color: var(--ink); }
+
+.modal-head { margin-bottom: 1.2rem; }
+.modal-head .exp-num { font-size: 0.78rem; }
+.modal-head h3 { font-family: var(--serif); font-size: 1.4rem; font-weight: 500; margin: 0.1rem 0 0.3rem; }
+.modal-head .scaffold { color: var(--ink-soft); font-size: 0.85rem; font-style: italic; }
+
+.modal-mol {
+  width: 100%; height: 220px;
+  background: hsl(40, 20%, 99%);
+  border: 1px solid hsl(30, 15%, 92%); border-radius: 6px;
+  margin-bottom: 1.2rem;
+  display: flex; justify-content: center; align-items: center;
+  overflow: hidden;
+}
+.modal-mol canvas { max-width: 100%; max-height: 100%; }
+
+.modal-rows { display: flex; flex-direction: column; gap: 0.1rem; margin-top: 1rem; }
+.modal-row {
+  display: grid; grid-template-columns: 110px 1fr;
+  gap: 1rem; padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.84rem;
+}
+.modal-row:last-child { border-bottom: none; }
+.modal-row .k {
+  color: var(--ink-soft); font-size: 0.72rem;
+  text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;
+  padding-top: 2px;
+}
+.modal-row .v { color: var(--ink); word-break: break-word; }
+.modal-row .v.smi { font-family: ui-monospace, Menlo, monospace; font-size: 0.78rem; color: var(--ink-soft); }
+
+.modal-gates {
+  display: flex; gap: 3px; margin-top: 0.4rem;
+}
+.modal-gate-dot {
+  flex: 1; height: 6px; background: var(--surface-2);
+  border-radius: 1px;
+}
+.modal-gate-dot.done { background: var(--good); }
+.modal-gate-dot.fail { background: var(--bad); }
+.modal-gate-dot.running { background: var(--accent); animation: pipeFlow 1.2s ease-in-out infinite; }
 </style>
 </head>
 <body>
 
 <main>
 
-  <!-- HEADER -->
+  <!-- COMPACT HEADER -->
   <header>
     <div class="brand">
       <div class="h">The Antibiotic Scientist</div>
-      <div class="sub">an AI running on cloud, designing new medicine</div>
+      <div class="sub">an AI running on cloud, designing new medicine for a drug-resistant infection</div>
     </div>
     <div class="live" id="live-tag">
       <span class="live-dot" id="live-dot"></span>
@@ -405,99 +449,63 @@ footer .right { font-size: 0.76rem; color: var(--ink-faint); max-width: 440px; t
     </div>
   </header>
 
-  <!-- HERO STATEMENT -->
-  <section class="hero">
-    <h1>An AI scientist, running on cloud, designing <em>new medicine</em> for a drug-resistant infection.</h1>
-    <p class="lede">
-      Methicillin-resistant staph (MRSA) kills over a million people a year, and most big drug companies stopped making new antibiotics. This is an autonomous AI chemist trying to help — proposing new molecules, testing them computationally, and saving the ones that might work.
-    </p>
-  </section>
-
-  <!-- LIVE NOW CARD -->
-  <section class="now-card">
-    <div class="now-orb" id="now-orb" data-state="asleep">
+  <!-- STATUS STRIP -->
+  <section class="status-strip">
+    <div class="status-orb" id="status-orb" data-state="asleep">
       <div class="ring"></div>
       <div class="core"></div>
     </div>
-    <div class="now-copy">
-      <div class="state-label" id="state-label">loading…</div>
+    <div class="status-body" id="status-body" data-state="asleep">
+      <span class="pill" id="state-pill">loading…</span>
       <div class="headline" id="headline">—</div>
-      <div class="desc" id="desc">Reading live data from the agent’s cloud computer…</div>
+      <div class="desc" id="desc">Reading live data from the agent…</div>
+    </div>
+    <div class="status-cta">
+      <div class="stat" id="num-cand">—</div>
+      <div class="stat-sub">experiments run</div>
     </div>
   </section>
 
-  <!-- HOW IT WORKS -->
-  <section class="story-section">
-    <div class="eyebrow">how it works</div>
-    <h2>It sleeps when it's not working. Wakes up instantly when it is.</h2>
-    <p class="blurb">
-      Like an app minimised on your phone, the agent is parked to disk when it has nothing to do — no memory used, no bill running. When a new task arrives, it's restored in under a second. This is how it runs 24/7 at the cost of a few cents a day.
-    </p>
-
-    <!-- Live sleep/wake timeline (last 60 min) -->
-    <div class="sw-timeline" id="sw-timeline">
-      <div class="sw-block asleep" style="flex: 1;"></div>
+  <!-- QUICK METRICS -->
+  <section class="metrics">
+    <div class="metric">
+      <div class="k">time spent working</div>
+      <div class="v" id="m-time">—<span class="unit" id="m-time-unit"></span></div>
+      <div class="sub" id="m-time-sub">across billing period</div>
     </div>
-    <div class="sw-timeline-legend">
-      <span><span class="sw awake"></span>working</span>
-      <span><span class="sw asleep"></span>sleeping (paused on disk)</span>
-      <span id="sw-window" style="color: var(--ink-faint)">last hour</span>
+    <div class="metric">
+      <div class="k">sleep/wake cycles</div>
+      <div class="v" id="m-cycles">—</div>
+      <div class="sub" id="m-cycles-sub">agent paused to save cost</div>
     </div>
-
-    <div class="sw-summary">
-      <div><strong id="sw-work">—</strong> spent working</div>
-      <div><strong id="sw-sleep">—</strong> spent sleeping</div>
-      <div><strong id="sw-wakes">—</strong> sleep/wake cycles</div>
+    <div class="metric">
+      <div class="k">cost so far</div>
+      <div class="v" id="m-cost">—</div>
+      <div class="sub" id="m-cost-sub">≈ rough estimate</div>
     </div>
   </section>
 
-  <!-- WORK DONE -->
-  <section class="story-section">
-    <div class="eyebrow">what it's made so far</div>
-    <h2>Novel drug candidates, each checked by twelve independent tests.</h2>
-    <p class="blurb">
-      Every molecule has to pass a chemistry sanity check, a physics-based binding simulation, a toxicity screen, a novelty check against all known drugs, and a final adversarial review. Only candidates that clear all twelve get published.
-    </p>
-
-    <div class="stats-grid">
-      <div class="stat">
-        <div class="eye">molecules designed</div>
-        <div class="v" id="s-cand">—</div>
-        <div class="sub" id="s-cand-sub">total across the agent's life</div>
-      </div>
-      <div class="stat">
-        <div class="eye">time spent working</div>
-        <div class="v" id="s-time">—<span class="unit" id="s-time-unit"></span></div>
-        <div class="sub" id="s-time-sub">since this run started</div>
-      </div>
-      <div class="stat">
-        <div class="eye">cost so far</div>
-        <div class="v" id="s-cost">—</div>
-        <div class="sub" id="s-cost-sub">≈ rough estimate of cloud bill</div>
-      </div>
+  <!-- EXPERIMENTS FEED -->
+  <section>
+    <div class="section-label">experiments</div>
+    <div class="section-title">Each molecule is tested by twelve independent filters.</div>
+    <div class="section-sub">
+      If all twelve pass, the candidate is published. If any one fails — you'll see why below.
     </div>
-  </section>
 
-  <!-- RECENT MOLECULES -->
-  <section class="story-section">
-    <div class="eyebrow">recent molecules</div>
-    <h2>Latest candidates the agent has drafted.</h2>
-    <p class="blurb">
-      Each line is a new molecular design. The cryptic string at the bottom is the structure in SMILES format — a standard way chemists write molecules as text.
-    </p>
-    <div class="molecules-list" id="mol-list">
-      <div class="empty-mols">warming up — looking for the latest designs…</div>
+    <div class="experiments" id="experiments">
+      <div class="empty-experiments">loading experiments…</div>
     </div>
   </section>
 
   <!-- EXPLAINER -->
   <section class="explain">
-    <h3>A note on what this is and isn't.</h3>
+    <h3>What you're actually watching.</h3>
     <p>
-      These molecules are <strong>computational hypotheses</strong>. They have not been synthesised, tested in bacteria, or reviewed by any regulator. Think of them as starting points: the agent is doing the 95% of medicinal-chemistry work that happens before any wet lab opens a vial.
+      Each card is a <strong>molecular design experiment</strong>. The AI proposes a new compound, then runs it through a twelve-step filter chain: chemistry sanity, binding simulation against the bacterial target, toxicity prediction, novelty check against all known drugs, and an adversarial review. Only candidates that survive all twelve are flagged as leads.
     </p>
     <p>
-      If you run a lab that works on antibiotic development and something here looks interesting, reach out — the agent is generating these openly so they can be picked up.
+      These are <strong>computational hypotheses, not therapies</strong>. They have not been synthesised or tested in any biological assay.
     </p>
   </section>
 
@@ -509,12 +517,21 @@ footer .right { font-size: 0.76rem; color: var(--ink-faint); max-width: 440px; t
       <a href="https://github.com/nextbysam/orb-antibiotic-scientist/blob/main/DISCLAIMER.md">disclaimer</a>
       &nbsp;·&nbsp;refreshes every 5 s
     </div>
-    <div class="right">
-      computational candidates, not therapies · not medical advice · MIT licence
-    </div>
+    <div class="right">computational candidates only · not medical advice · MIT license</div>
   </footer>
 
 </main>
+
+<!-- EXPERIMENT DETAIL MODAL -->
+<div class="modal-backdrop" id="modal-backdrop" aria-hidden="true">
+  <div class="modal" id="modal-body">
+    <button class="modal-close" id="modal-close">close</button>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<!-- smiles-drawer for molecular structure rendering -->
+<script src="https://unpkg.com/smiles-drawer@2.1.7/dist/smiles-drawer.min.js"></script>
 
 <script>
 /* ──────────────────────────────────────────────────────────
@@ -522,19 +539,6 @@ footer .right { font-size: 0.76rem; color: var(--ink-faint); max-width: 440px; t
    ────────────────────────────────────────────────────────── */
 const $ = (id) => document.getElementById(id);
 const escape = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-function fmtDuration(sec, { short = false } = {}) {
-  sec = Math.max(0, Math.round(sec));
-  if (short) {
-    if (sec < 60)   return `${sec}s`;
-    if (sec < 3600) return `${Math.floor(sec/60)}m`;
-    return `${Math.floor(sec/3600)}h ${Math.floor((sec%3600)/60)}m`;
-  }
-  if (sec < 60)    return `${sec} seconds`;
-  if (sec < 120)   return `1 minute`;
-  if (sec < 3600)  return `${Math.floor(sec/60)} minutes`;
-  return `${Math.floor(sec/3600)}h ${Math.floor((sec%3600)/60)}m`;
-}
 
 function fmtAgo(iso) {
   if (!iso) return "—";
@@ -544,267 +548,301 @@ function fmtAgo(iso) {
   if (d < 3600) return `${Math.round(d/60)}m ago`;
   return `${Math.round(d/3600)}h ago`;
 }
+function fmtDuration(sec) {
+  sec = Math.max(0, Math.round(sec));
+  if (sec < 60)    return `${sec}s`;
+  if (sec < 3600)  return `${Math.floor(sec/60)}m`;
+  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60);
+  return h >= 24 ? `${Math.floor(h/24)}d ${h%24}h` : `${h}h ${m}m`;
+}
+
+/* SMILES → 2D canvas drawing (cached) */
+let smilesDrawer = null;
+function ensureDrawer() {
+  if (smilesDrawer || typeof SmilesDrawer === "undefined") return smilesDrawer;
+  smilesDrawer = new SmilesDrawer.Drawer({
+    width: 280, height: 130, bondThickness: 1.0,
+    bondLength: 14, atomVisualization: "default",
+    isomeric: false, terminalCarbons: false,
+    padding: 10,
+  });
+  return smilesDrawer;
+}
+function drawMol(canvas, smiles) {
+  if (!smiles || typeof SmilesDrawer === "undefined") {
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "hsl(20, 4%, 58%)";
+    ctx.font = "12px Lato, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("structure loading…", canvas.width/2, canvas.height/2);
+    return;
+  }
+  const d = ensureDrawer();
+  SmilesDrawer.parse(smiles, (tree) => {
+    d.draw(tree, canvas, "light");
+  }, (err) => {
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "hsl(20, 4%, 58%)";
+    ctx.font = "11px Lato, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("(structure unavailable)", canvas.width/2, canvas.height/2);
+  });
+}
 
 /* ──────────────────────────────────────────────────────────
-   classify the "what is the agent doing" story
+   status strip
    ────────────────────────────────────────────────────────── */
 function classifyState(state) {
   const comp = (state.computers || [])[0] || {};
   const s = (comp.agent_state || "").toLowerCase();
-  const candN = comp.findings_candidates || 0;
+  const n = comp.findings_candidates || 0;
 
-  if (!comp.agent_state) {
-    return { orb: "err", chip: "offline", title: "The agent isn’t running right now.", desc: "The cloud container shows no live process." };
-  }
-  if (s === "running") {
-    return {
-      orb: "awake", chip: "working now",
-      title: `Designing the next molecule.`,
-      desc: `It has <em>${candN}</em> candidates saved so far. Right now it’s proposing another and running it through the twelve-gate filter chain.`,
-    };
-  }
-  if (s === "dumping" || s === "checkpointing") {
-    return {
-      orb: "checkpointing", chip: "going to sleep",
-      title: "Saving its work to disk.",
-      desc: "The agent just finished a task. The cloud is parking its memory to a checkpoint so nothing is billed while it idles.",
-    };
-  }
-  if (s === "restoring" || s === "waking") {
-    return {
-      orb: "waking", chip: "waking up",
-      title: "Coming back online.",
-      desc: "A trigger arrived — the agent is being restored from its checkpoint. This takes under a second.",
-    };
-  }
-  if (s === "checkpointed" || s === "sleeping" || s === "frozen") {
-    return {
-      orb: "asleep", chip: "sleeping",
-      title: `Sleeping between tasks.`,
-      desc: `It has designed <em>${candN}</em> molecules so far. It’s parked on disk right now, costing nothing. When the next task arrives, it’ll be back in under a second.`,
-    };
-  }
-  if (s === "error") {
-    return { orb: "err", chip: "recovering", title: "Last run errored. Restarting…", desc: "The process is cycling — new designs will resume shortly." };
-  }
-  return { orb: "asleep", chip: s, title: "Agent is idle.", desc: "" };
+  if (!comp.agent_state)
+    return { orb: "err", chip: "offline", title: "The agent isn't running.", desc: "No live process on the cloud container." };
+  if (s === "running")
+    return { orb: "awake", chip: "working", title: "Running a new experiment.", desc: `Proposing molecule #${n+1} and running it through the twelve filters.` };
+  if (s === "dumping" || s === "checkpointing")
+    return { orb: "checkpointing", chip: "pausing", title: "Saving state to disk.", desc: "Finished a task; going to sleep until the next one." };
+  if (s === "restoring" || s === "waking")
+    return { orb: "waking", chip: "waking up", title: "Coming back online.", desc: "Restoring from the disk snapshot — takes under a second." };
+  if (s === "checkpointed" || s === "sleeping" || s === "frozen")
+    return { orb: "asleep", chip: "sleeping", title: "Paused between experiments.", desc: `Parked on disk. Zero cost while sleeping. Will wake when the next task arrives.` };
+  if (s === "error")
+    return { orb: "err", chip: "recovering", title: "Recovering from an error.", desc: "The process is cycling — new experiments will resume shortly." };
+  return { orb: "asleep", chip: s, title: "Idle.", desc: "" };
 }
 
-/* ──────────────────────────────────────────────────────────
-   lifecycle bands from structured events
-   ────────────────────────────────────────────────────────── */
-function buildBands(events, sessionStartMs, nowMs) {
-  if (!events || !events.length) return { bands: [], wakes: 0 };
-  const bands = [];
-  let awakeSince = null;
-  let wakes = 0;
-  for (const e of events) {
-    const ms = new Date(e.ts).getTime();
-    if (isNaN(ms) || ms > nowMs) continue;
-    if (e.kind === "run_start" || e.kind === "startup") {
-      if (awakeSince === null) { awakeSince = Math.max(ms, sessionStartMs); wakes++; }
-    } else if (e.kind === "run_end" || e.kind === "restart") {
-      if (awakeSince !== null) { bands.push({ from: awakeSince, to: ms, awake: true }); awakeSince = null; }
-    }
-  }
-  if (awakeSince !== null) bands.push({ from: awakeSince, to: nowMs, awake: true });
-  return { bands, wakes };
-}
-
-/* ──────────────────────────────────────────────────────────
-   render "live now" card
-   ────────────────────────────────────────────────────────── */
-function renderNow(state) {
+let prevCand = 0;
+function renderStatus(state) {
+  const comp = (state.computers || [])[0] || {};
   const c = classifyState(state);
-  const orbEl = $("now-orb");
-  orbEl.dataset.state = c.orb;
-  $("state-label").textContent = c.chip;
-  $("headline").innerHTML = escape(c.title).replace(/&lt;em&gt;/g, "<em>").replace(/&lt;\/em&gt;/g, "</em>");
+  const orbEl = $("status-orb");
+  const bodyEl = $("status-body");
+  orbEl.dataset.state = c.orb; bodyEl.dataset.state = c.orb;
+  $("state-pill").textContent = c.chip;
+  $("headline").textContent = c.title;
+  $("desc").textContent = c.desc;
 
-  // The desc contains injected <em>...</em> from our template, preserve it
-  $("desc").innerHTML = c.desc;
+  const n = comp.findings_candidates || 0;
+  const numEl = $("num-cand");
+  if (n !== prevCand) {
+    numEl.classList.add("pulse");
+    setTimeout(() => numEl.classList.remove("pulse"), 800);
+    prevCand = n;
+  }
+  numEl.textContent = n.toLocaleString();
 
-  // live-tag dot
-  const ldot = $("live-dot");
-  const llbl = $("live-label");
+  // live tag
+  const ldot = $("live-dot"), llbl = $("live-label");
   if (c.orb === "awake") { ldot.className = "live-dot"; llbl.textContent = "live"; }
   else if (c.orb === "err") { ldot.className = "live-dot off"; llbl.textContent = "offline"; }
   else { ldot.className = "live-dot idle"; llbl.textContent = "idle"; }
 }
 
 /* ──────────────────────────────────────────────────────────
-   render sleep/wake timeline (last hour window)
+   metrics
    ────────────────────────────────────────────────────────── */
-function renderSleepTimeline(state, detail) {
-  const comp = (state.computers || [])[0] || {};
-  const nowMs = Date.now();
-  const windowMs = 60 * 60 * 1000;
-  const windowStart = nowMs - windowMs;
-  const sessionStart = comp.session_started_at ? new Date(comp.session_started_at).getTime() : windowStart;
-  // Actual session window — cap at window start so stats don't lie when session < 1hr
-  const effectiveStart = Math.max(sessionStart, windowStart);
-  const effectiveMs = nowMs - effectiveStart;
-
-  const events = (detail && detail.events) || [];
-  const { bands, wakes } = buildBands(events, effectiveStart, nowMs);
-
-  // Build timeline cells proportionally
-  let awakeSec = 0, asleepSec = 0;
-  for (const b of bands) {
-    const s = Math.min(b.to, nowMs) - Math.max(b.from, effectiveStart);
-    if (s > 0 && b.awake) awakeSec += s / 1000;
-  }
-  const totalSec = Math.max(1, effectiveMs / 1000);
-  asleepSec = Math.max(0, totalSec - awakeSec);
-
-  // Render actual bars (awake segments + asleep complement) over the effective window
-  const tl = $("sw-timeline");
-  tl.innerHTML = "";
-
-  if (sessionStart > windowStart) {
-    const preFrac = (sessionStart - windowStart) / windowMs * 100;
-    if (preFrac > 0.5) {
-      const pre = document.createElement("div");
-      pre.className = "sw-block asleep";
-      pre.style.flex = `${preFrac}`;
-      pre.title = "before session started";
-      tl.appendChild(pre);
-    }
-  }
-  // Fill in the session window with real bands, plus gaps
-  let cursor = effectiveStart;
-  const sortedAwake = bands.filter(b => b.awake).sort((a,b) => a.from - b.from);
-  for (const b of sortedAwake) {
-    if (b.from > cursor) {
-      const gapFrac = (b.from - cursor) / windowMs * 100;
-      if (gapFrac > 0.1) {
-        const gap = document.createElement("div");
-        gap.className = "sw-block asleep";
-        gap.style.flex = `${gapFrac}`;
-        gap.title = `sleeping ${fmtDuration((b.from - cursor)/1000)}`;
-        tl.appendChild(gap);
-      }
-    }
-    const bFrac = (Math.min(b.to, nowMs) - Math.max(b.from, cursor)) / windowMs * 100;
-    if (bFrac > 0.1) {
-      const aw = document.createElement("div");
-      aw.className = "sw-block awake";
-      aw.style.flex = `${bFrac}`;
-      aw.title = `working ${fmtDuration((b.to - b.from)/1000)}`;
-      tl.appendChild(aw);
-    }
-    cursor = Math.max(cursor, b.to);
-  }
-  if (cursor < nowMs) {
-    const gapFrac = (nowMs - cursor) / windowMs * 100;
-    if (gapFrac > 0.1) {
-      const gap = document.createElement("div");
-      gap.className = "sw-block asleep";
-      gap.style.flex = `${gapFrac}`;
-      gap.title = `sleeping ${fmtDuration((nowMs - cursor)/1000)}`;
-      tl.appendChild(gap);
-    }
-  }
-
-  $("sw-work").textContent = fmtDuration(awakeSec);
-  $("sw-sleep").textContent = fmtDuration(asleepSec);
-  $("sw-wakes").textContent = `${wakes}`;
-  const ss = comp.session_started_at ? `since ${fmtAgo(comp.session_started_at)}` : "last hour";
-  $("sw-window").textContent = effectiveMs < windowMs ? ss : "last hour";
-}
-
-/* ──────────────────────────────────────────────────────────
-   render stats row (work done)
-   ────────────────────────────────────────────────────────── */
-let prevCand = 0;
-function renderStats(state) {
+function renderMetrics(state) {
   const comp = (state.computers || [])[0] || {};
   const u = state.usage || {};
 
-  const candN = comp.findings_candidates || 0;
-  const candEl = $("s-cand");
-  if (candN !== prevCand) {
-    candEl.classList.add("pulse");
-    setTimeout(() => candEl.classList.remove("pulse"), 800);
-    prevCand = candN;
-  }
-  candEl.textContent = candN.toLocaleString();
-  $("s-cand-sub").textContent = comp.session_started_at
-    ? `started ${fmtAgo(comp.session_started_at)}`
-    : "total across the agent's life";
-
-  // "time spent working" — from events where available, else runtime_gb_hours proxy
-  const runtime_gbh = (u.runtime_gb_hours != null) ? u.runtime_gb_hours : null;
+  // time spent working (org-wide runtime_gb_hours, normalized to single computer)
+  const rtGbh = u.runtime_gb_hours;
   const rtMb = comp.runtime_mb || 4096;
-  const runtime_hours = runtime_gbh != null ? runtime_gbh / (rtMb / 1024) : null;
-  if (runtime_hours != null) {
-    const worked_sec = runtime_hours * 3600;
-    const d = Math.floor(worked_sec / 86400);
-    const h = Math.floor((worked_sec % 86400) / 3600);
-    const m = Math.floor((worked_sec % 3600) / 60);
-    let str, unit;
-    if (d > 0) { str = `${d}`; unit = d === 1 ? "day" : "days"; }
-    else if (h > 0) { str = `${h}`; unit = h === 1 ? "hour" : "hours"; }
-    else { str = `${m}`; unit = m === 1 ? "minute" : "minutes"; }
-    $("s-time").childNodes[0].textContent = str;
-    $("s-time-unit").textContent = " " + unit;
-    $("s-time-sub").textContent = `across the whole billing period`;
-  } else {
-    $("s-time").textContent = "—";
-    $("s-time-unit").textContent = "";
-    $("s-time-sub").textContent = "calculating…";
+  let rtHours = rtGbh != null ? rtGbh / (rtMb / 1024) : null;
+  if (rtHours != null) {
+    const secs = rtHours * 3600;
+    const d = Math.floor(secs / 86400);
+    const h = Math.floor((secs % 86400) / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    let val, unit;
+    if (d > 0) { val = d; unit = d === 1 ? "day" : "days"; }
+    else if (h > 0) { val = h; unit = h === 1 ? "hour" : "hours"; }
+    else { val = m; unit = m === 1 ? "minute" : "minutes"; }
+    $("m-time").childNodes[0].textContent = val;
+    $("m-time-unit").textContent = " " + unit;
   }
 
-  // cost
+  const cycles = u.checkpoint_cycles;
+  $("m-cycles").textContent = cycles != null ? cycles.toLocaleString() : "—";
+
   const cost = u.estimated_cost_usd;
   if (cost != null) {
-    if (cost < 0.1)      $("s-cost").textContent = `¢${Math.round(cost * 100)}`;
-    else if (cost < 10)  $("s-cost").textContent = `$${cost.toFixed(2)}`;
-    else                 $("s-cost").textContent = `$${cost.toFixed(0)}`;
-    $("s-cost-sub").textContent = "≈ rough estimate of cloud bill so far";
-  } else {
-    $("s-cost").textContent = "—";
+    if (cost < 0.1) $("m-cost").textContent = `¢${Math.round(cost * 100)}`;
+    else if (cost < 10) $("m-cost").textContent = `$${cost.toFixed(2)}`;
+    else $("m-cost").textContent = `$${cost.toFixed(0)}`;
   }
 }
 
 /* ──────────────────────────────────────────────────────────
-   render molecules list
+   experiments
    ────────────────────────────────────────────────────────── */
-function renderMolecules(detail) {
-  const list = $("mol-list");
-  const cands = (detail && detail.candidates_list) || [];
-  if (!cands.length) {
-    list.innerHTML = `<div class="empty-mols">warming up — looking for the latest designs…</div>`;
+function reasonCopy(c) {
+  if (c.status === "passed") return "cleared all twelve filters — added to shortlist.";
+  if (c.status === "running") {
+    const progress = `${c.passed_gates}/${c.total_gates} filters complete`;
+    if (c.passed_gates <= 1) return "Proposing molecule, about to run filters.";
+    return progress + ".";
+  }
+  if (c.status === "failed") {
+    if (c.reason) return c.reason;
+    return "did not pass one of the filters.";
+  }
+  return "—";
+}
+function reasonFriendly(reason) {
+  if (!reason) return "";
+  const r = reason.toLowerCase();
+  if (r.includes("docking") && r.includes("weak")) {
+    const m = reason.match(/(-?\d+\.\d+)\s*kcal/);
+    return `<strong>too weak a binder</strong> to the target — ${m ? m[1] + " kcal/mol (we need ≤ −8.0)" : "below threshold"}`;
+  }
+  if (r.includes("scaffold")) return "<strong>too similar</strong> to an existing antibiotic scaffold";
+  if (r.includes("resistance")) return "<strong>vulnerable to resistance</strong> — bound only known mutation sites";
+  if (r.includes("pocket") || r.includes("contacts")) return "<strong>didn't fit the target pocket</strong> — too few contacts";
+  if (r.includes("bbb") || r.includes("brain")) return "<strong>would cross into the brain</strong> — wrong for a peripheral infection";
+  if (r.includes("tox") || r.includes("ames")) return "<strong>predicted toxicity</strong> — would likely fail safety screens";
+  return escape(reason);
+}
+
+function renderExperiments(list) {
+  const el = $("experiments");
+  if (!list || !list.length) {
+    el.innerHTML = `<div class="empty-experiments">loading experiments…</div>`;
     return;
   }
-  list.innerHTML = cands.slice(0, 8).map((c, i) => {
-    const smi = c.smiles ? String(c.smiles) : "";
-    const smiShort = smi.length > 82 ? smi.slice(0, 80) + "…" : smi;
-    const name = c.name || c.candidate_id || "—";
+
+  // infer experiment number from candidate_id or order
+  const total = list.length;
+  el.innerHTML = list.map((c, i) => {
+    const expNum = list.length - i; // newest first = highest number
+    const statusLabel =
+      c.status === "passed" ? "passed" :
+      c.status === "failed" ? "failed" : "running";
+    const pills = Array.from({ length: c.total_gates || 12 }).map((_, j) => {
+      if (c.status === "failed" && j === (c.passed_gates || 0)) return '<div class="exp-pipe-dot fail"></div>';
+      if (j < (c.passed_gates || 0)) return '<div class="exp-pipe-dot done"></div>';
+      if (c.status === "running" && j === (c.passed_gates || 0)) return '<div class="exp-pipe-dot running"></div>';
+      return '<div class="exp-pipe-dot"></div>';
+    }).join("");
+
+    const reason = c.status === "failed"
+      ? reasonFriendly(c.reason)
+      : (c.status === "passed"
+          ? `<strong style="color: var(--good)">saved to shortlist</strong> — rigor ${(c.rigor_score||0).toFixed(2)}`
+          : escape(reasonCopy(c)));
+
     return `
-      <div class="mol-row">
-        <div class="mol-n">${i + 1}</div>
-        <div class="mol-body">
-          <div class="mol-name">${escape(name)}</div>
-          <div class="mol-id">${escape(c.candidate_id || "")}</div>
-          ${smi ? `<div class="mol-smi" title="${escape(smi)}">${escape(smiShort)}</div>` : ""}
+      <div class="exp-card" data-cid="${escape(c.candidate_id)}">
+        <div class="exp-head">
+          <span class="exp-num">Experiment ${String(expNum).padStart(2, "0")}</span>
+          <span class="exp-ago">${c.designed_at ? fmtAgo(c.designed_at) : ""}</span>
         </div>
-        <div class="mol-ago">${c.designed_at ? fmtAgo(c.designed_at) : "—"}</div>
-      </div>`;
+        <div class="exp-title">${escape(c.name || c.candidate_id || "—")}</div>
+        ${c.scaffold_class ? `<div class="exp-scaffold">${escape(c.scaffold_class)}</div>` : ""}
+        <div class="exp-mol">
+          <canvas class="mol-canvas" data-smiles="${escape(c.smiles || "")}" width="280" height="130"></canvas>
+        </div>
+        <div class="exp-pipeline">${pills}</div>
+        <div class="exp-outcome">
+          <span class="badge ${statusLabel}">${statusLabel === "running" ? "○ running" : statusLabel === "passed" ? "✓ passed" : "✕ failed"}</span>
+        </div>
+        <div class="exp-reason">${reason}</div>
+      </div>
+    `;
   }).join("");
+
+  // Draw molecules on the card canvases
+  document.querySelectorAll(".exp-card").forEach(card => {
+    const cvs = card.querySelector(".mol-canvas");
+    const smi = cvs.getAttribute("data-smiles");
+    if (smi) drawMol(cvs, smi);
+  });
+
+  // Card click opens modal
+  document.querySelectorAll(".exp-card").forEach(card => {
+    card.addEventListener("click", () => {
+      const cid = card.getAttribute("data-cid");
+      const c = list.find(x => x.candidate_id === cid);
+      if (c) openModal(c, list.length - list.indexOf(c));
+    });
+  });
 }
 
 /* ──────────────────────────────────────────────────────────
-   fetch loop — always asks for detail on the active (first) computer
+   modal
+   ────────────────────────────────────────────────────────── */
+const GATE_NAMES = [
+  "SMILES valid", "Hygiene (PAINS/REOS)", "Drug-likeness (Lipinski)",
+  "Synthesizability", "Primary dock (Vina)", "Consensus dock",
+  "Mechanism sanity", "ADMET", "Novelty vs ChEMBL",
+  "Resistance-proof", "Retrosynthesis", "Red-team review",
+];
+
+function openModal(c, expNum) {
+  const pills = Array.from({ length: c.total_gates || 12 }).map((_, j) => {
+    if (c.status === "failed" && j === (c.passed_gates || 0)) return '<div class="modal-gate-dot fail" title="' + GATE_NAMES[j] + ' — failed"></div>';
+    if (j < (c.passed_gates || 0)) return '<div class="modal-gate-dot done" title="' + GATE_NAMES[j] + ' — passed"></div>';
+    if (c.status === "running" && j === (c.passed_gates || 0)) return '<div class="modal-gate-dot running" title="' + GATE_NAMES[j] + ' — running"></div>';
+    return '<div class="modal-gate-dot" title="' + GATE_NAMES[j] + ' — pending"></div>';
+  }).join("");
+
+  const statusLabel =
+    c.status === "passed" ? `<span class="badge passed" style="padding:0.2rem 0.5rem;border-radius:3px;border:1px solid var(--good);color:var(--good);background:var(--good-bg);font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;">passed</span>` :
+    c.status === "failed" ? `<span class="badge failed" style="padding:0.2rem 0.5rem;border-radius:3px;border:1px solid var(--bad);color:var(--bad);background:var(--bad-bg);font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;">failed</span>` :
+    `<span class="badge running" style="padding:0.2rem 0.5rem;border-radius:3px;border:1px solid var(--accent);color:var(--accent);background:var(--accent-bg);font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;">running</span>`;
+
+  $("modal-content").innerHTML = `
+    <div class="modal-head">
+      <div class="exp-num">Experiment ${String(expNum).padStart(2, "0")} · ${statusLabel}</div>
+      <h3>${escape(c.name || c.candidate_id || "—")}</h3>
+      ${c.scaffold_class ? `<div class="scaffold">${escape(c.scaffold_class)}</div>` : ""}
+    </div>
+
+    <div class="modal-mol">
+      <canvas class="modal-mol-canvas" data-smiles="${escape(c.smiles || "")}" width="560" height="220"></canvas>
+    </div>
+
+    <div class="section-label" style="margin-top:0.4rem;margin-bottom:0.3rem;">pipeline · ${c.passed_gates || 0} of ${c.total_gates || 12} filters ${c.status === "failed" ? "before failure" : c.status === "passed" ? "passed" : "so far"}</div>
+    <div class="modal-gates">${pills}</div>
+
+    <div class="modal-rows">
+      ${c.reason ? `<div class="modal-row"><div class="k">outcome</div><div class="v">${reasonFriendly(c.reason)}</div></div>` : ""}
+      ${c.docking_dg != null ? `<div class="modal-row"><div class="k">binding</div><div class="v">${c.docking_dg.toFixed(2)} kcal/mol <span style="color:var(--ink-soft);font-size:0.78rem;">(threshold ≤ −8.0)</span></div></div>` : ""}
+      ${c.rigor_score != null ? `<div class="modal-row"><div class="k">rigor score</div><div class="v">${c.rigor_score.toFixed(3)} <span style="color:var(--ink-soft);font-size:0.78rem;">(needs ≥ 0.83)</span></div></div>` : ""}
+      ${c.smiles ? `<div class="modal-row"><div class="k">SMILES</div><div class="v smi">${escape(c.smiles)}</div></div>` : ""}
+      ${c.designed_at ? `<div class="modal-row"><div class="k">designed</div><div class="v">${fmtAgo(c.designed_at)}</div></div>` : ""}
+      <div class="modal-row"><div class="k">id</div><div class="v smi">${escape(c.candidate_id)}</div></div>
+    </div>
+  `;
+  $("modal-backdrop").classList.add("open");
+  $("modal-backdrop").setAttribute("aria-hidden", "false");
+
+  const cvs = document.querySelector(".modal-mol-canvas");
+  if (cvs && c.smiles) drawMol(cvs, c.smiles);
+}
+function closeModal() {
+  $("modal-backdrop").classList.remove("open");
+  $("modal-backdrop").setAttribute("aria-hidden", "true");
+}
+$("modal-close").addEventListener("click", closeModal);
+$("modal-backdrop").addEventListener("click", (e) => {
+  if (e.target.id === "modal-backdrop") closeModal();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeModal();
+});
+
+/* ──────────────────────────────────────────────────────────
+   fetch loop
    ────────────────────────────────────────────────────────── */
 let failStreak = 0;
 async function tick() {
   try {
-    // First: cheap overview fetch
+    // cheap overview + auto-drill on first computer
     let r = await fetch("/api/state?t=" + Date.now(), { cache: "no-store" });
     if (!r.ok) throw new Error("HTTP " + r.status);
     let state = await r.json();
-    // Then: if we have a computer, fetch detail too
     const firstId = ((state.computers || [])[0] || {}).id;
     let detail = null;
     if (firstId) {
@@ -812,28 +850,33 @@ async function tick() {
       if (r.ok) {
         const full = await r.json();
         detail = full.detail || null;
-        // use the authoritative 'computers' list from the detailed fetch too
         state = full;
       }
     }
     failStreak = 0;
-    renderNow(state);
-    renderSleepTimeline(state, detail);
-    renderStats(state);
-    renderMolecules(detail);
+    renderStatus(state);
+    renderMetrics(state);
+    renderExperiments(detail ? detail.candidates_list : []);
   } catch (e) {
     failStreak++;
     if (failStreak >= 3) {
       $("live-dot").className = "live-dot off";
       $("live-label").textContent = "offline";
-      $("state-label").textContent = "offline";
-      $("headline").textContent = "Can't reach the agent right now.";
-      $("desc").textContent = "Network or proxy issue. Will retry.";
     }
   }
 }
-tick();
-setInterval(tick, 5000);
+// wait until smiles-drawer library is ready OR 3 seconds
+(function bootstrap() {
+  let waited = 0;
+  const iv = setInterval(() => {
+    waited += 100;
+    if (typeof SmilesDrawer !== "undefined" || waited >= 3000) {
+      clearInterval(iv);
+      tick();
+      setInterval(tick, 5000);
+    }
+  }, 100);
+})();
 </script>
 
 </body>

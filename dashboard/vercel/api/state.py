@@ -222,23 +222,90 @@ def _summary_for_computer(c: dict) -> dict:
     }
 
 
-def _load_candidate_list(cid: str, limit: int = 30) -> list[dict]:
+def _load_candidate_list(cid: str, limit: int = 20) -> list[dict]:
+    """Return candidates with status + pipeline progress so the dashboard
+    can render them as experiments (running / passed / failed with reason)."""
     dirs = [
         f for f in _file_dir(cid, "agent/code/findings/candidates")
         if f.get("type") == "directory" and f.get("name") not in (".", "..", ".gitkeep")
     ]
     out: list[dict] = []
     for d in sorted(dirs, key=lambda x: x.get("name", ""), reverse=True)[:limit]:
-        meta = _file_json(cid, f"agent/code/findings/candidates/{d['name']}/candidate.json")
-        if meta:
-            out.append({
-                "candidate_id": meta.get("candidate_id") or d["name"],
-                "name": meta.get("name"),
-                "designed_at": meta.get("designed_at"),
-                "smiles": meta.get("smiles"),
-            })
-        else:
-            out.append({"candidate_id": d["name"], "name": None, "designed_at": None})
+        name = d["name"]
+        base = f"agent/code/findings/candidates/{name}"
+        # List per-candidate artifacts
+        inner = _file_dir(cid, base)
+        artifacts = [f.get("name") for f in inner if f.get("type") == "file"]
+        has = set(artifacts)
+
+        meta = _file_json(cid, f"{base}/candidate.json") or {}
+        scored = _file_json(cid, f"{base}/scored.json") if "scored.json" in has else None
+        docking = _file_json(cid, f"{base}/docking.json") if "docking.json" in has else None
+        redteam = _file_json(cid, f"{base}/redteam.json") if "redteam.json" in has else None
+
+        # Derive outcome
+        status = "in_progress"
+        reason = None
+        rigor = None
+        dg = None
+        passed_gates = 1  # candidate.json at minimum
+        total_gates = 12
+
+        if "validate.json" in has: passed_gates = max(passed_gates, 4)
+        if "docking.json" in has: passed_gates = max(passed_gates, 5)
+        if "docking-secondary.json" in has: passed_gates = max(passed_gates, 6)
+        if "mechanism.json" in has: passed_gates = max(passed_gates, 7)
+        if "admet.json" in has: passed_gates = max(passed_gates, 8)
+        if "novelty.json" in has: passed_gates = max(passed_gates, 9)
+        if "retrosynthesis.json" in has: passed_gates = max(passed_gates, 11)
+        if "redteam.json" in has: passed_gates = max(passed_gates, 12)
+
+        if docking and isinstance(docking, dict):
+            dg = docking.get("best_energy_kcalmol")
+            thr = docking.get("threshold_kcalmol") or -8.0
+            if dg is not None and dg > thr:
+                status = "failed"
+                reason = f"docking too weak — {dg:.2f} kcal/mol (needed ≤ {thr:.1f})"
+
+        if redteam and isinstance(redteam, dict):
+            if redteam.get("substantive_flaw"):
+                status = "failed"
+                flaws = redteam.get("flaws") or []
+                sub = next((f for f in flaws if f.get("substantive")), None)
+                if sub:
+                    reason = sub.get("description", "red-team vetoed")
+                    if len(reason) > 140:
+                        reason = reason[:138] + "…"
+                else:
+                    reason = "red-team vetoed"
+            else:
+                # passed red-team — if scored ≥ threshold, it's a pass
+                if scored and scored.get("above_threshold"):
+                    status = "passed"
+                    rigor = scored.get("rigor_score")
+
+        if scored and isinstance(scored, dict):
+            rigor = scored.get("rigor_score")
+            if status == "in_progress" and scored.get("above_threshold") is True:
+                status = "passed"
+            elif status == "in_progress" and scored.get("veto_applied"):
+                status = "failed"
+                reason = scored.get("veto_reason") or "vetoed by pipeline"
+
+        out.append({
+            "candidate_id": meta.get("candidate_id") or name,
+            "name": meta.get("name"),
+            "designed_at": meta.get("designed_at"),
+            "smiles": meta.get("smiles"),
+            "scaffold_class": (meta.get("design_rationale") or {}).get("scaffold_class"),
+            "status": status,
+            "reason": reason,
+            "rigor_score": rigor,
+            "docking_dg": dg,
+            "passed_gates": passed_gates,
+            "total_gates": total_gates,
+            "artifacts": sorted(artifacts),
+        })
     return out
 
 
