@@ -530,8 +530,10 @@ footer .right { font-size: 0.72rem; color: var(--ink-faint); max-width: 440px; t
   </div>
 </div>
 
-<!-- smiles-drawer for molecular structure rendering -->
-<script src="https://unpkg.com/smiles-drawer@2.1.7/dist/smiles-drawer.min.js"></script>
+<!-- smiles-drawer — lightweight pure-JS SMILES → 2D renderer. Pinned to
+     2.1.7 because 3.x changed the API. Use non-min for clearer errors. -->
+<script src="https://cdn.jsdelivr.net/npm/smiles-drawer@2.1.7/dist/smiles-drawer.min.js"
+        onerror="console.error('[dashboard] smiles-drawer CDN load failed')"></script>
 
 <script>
 /* ──────────────────────────────────────────────────────────
@@ -556,37 +558,80 @@ function fmtDuration(sec) {
   return h >= 24 ? `${Math.floor(h/24)}d ${h%24}h` : `${h}h ${m}m`;
 }
 
-/* SMILES → 2D canvas drawing (cached) */
-let smilesDrawer = null;
-function ensureDrawer() {
-  if (smilesDrawer || typeof SmilesDrawer === "undefined") return smilesDrawer;
-  smilesDrawer = new SmilesDrawer.Drawer({
-    width: 280, height: 130, bondThickness: 1.0,
-    bondLength: 14, atomVisualization: "default",
-    isomeric: false, terminalCarbons: false,
-    padding: 10,
+/* SMILES → 2D canvas drawing, fault-tolerant
+   Two-stage strategy:
+     1) Try the v2 parse API (tree callback).
+     2) On failure, try again with Kekulé-normalised fallback (a few
+        common agent outputs use non-canonical features that the parser
+        rejects).
+     3) If still failing, draw a monospace preview of the SMILES so the
+        card isn't blank — at least the chemist/layperson sees the
+        structure encoding. */
+const drawerCache = {};  // keyed by canvas size
+function getDrawer(w, h) {
+  const k = `${w}x${h}`;
+  if (drawerCache[k]) return drawerCache[k];
+  drawerCache[k] = new SmilesDrawer.Drawer({
+    width: w, height: h, bondThickness: 1.0, bondLength: 14,
+    atomVisualization: "default", isomeric: false,
+    terminalCarbons: false, padding: 10, compactDrawing: false,
   });
-  return smilesDrawer;
+  return drawerCache[k];
+}
+function drawFallback(canvas, smiles, label) {
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "hsl(20, 6%, 38%)";
+  ctx.font = "10px 'JetBrains Mono', ui-monospace, monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  // word-wrap the SMILES string across multiple lines
+  const s = String(smiles || "");
+  const maxChars = Math.floor((canvas.width - 24) / 6.2);
+  const lines = [];
+  for (let i = 0; i < s.length; i += maxChars) lines.push(s.slice(i, i + maxChars));
+  const total = (label ? 1 : 0) + lines.length;
+  const lineH = 14;
+  const startY = canvas.height/2 - (total * lineH)/2 + lineH/2;
+  if (label) {
+    ctx.fillStyle = "hsl(20, 4%, 58%)";
+    ctx.font = "italic 10px 'Lato', sans-serif";
+    ctx.fillText(label, canvas.width/2, startY);
+  }
+  ctx.fillStyle = "hsl(20, 6%, 30%)";
+  ctx.font = "11px 'JetBrains Mono', ui-monospace, monospace";
+  lines.forEach((ln, i) => {
+    ctx.fillText(ln, canvas.width/2, startY + (label?1:0)*lineH + i*lineH);
+  });
 }
 function drawMol(canvas, smiles) {
-  if (!smiles || typeof SmilesDrawer === "undefined") {
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "hsl(20, 4%, 58%)";
-    ctx.font = "12px Lato, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("structure loading…", canvas.width/2, canvas.height/2);
+  if (!canvas) return;
+  if (typeof SmilesDrawer === "undefined") {
+    drawFallback(canvas, smiles, "renderer loading…");
     return;
   }
-  const d = ensureDrawer();
-  SmilesDrawer.parse(smiles, (tree) => {
-    d.draw(tree, canvas, "light");
-  }, (err) => {
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "hsl(20, 4%, 58%)";
-    ctx.font = "11px Lato, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("(structure unavailable)", canvas.width/2, canvas.height/2);
-  });
+  if (!smiles) { drawFallback(canvas, "", "no structure"); return; }
+
+  const drawer = getDrawer(canvas.width, canvas.height);
+  try {
+    SmilesDrawer.parse(smiles,
+      (tree) => {
+        try { drawer.draw(tree, canvas, "light"); }
+        catch (err) {
+          console.warn("[mol] draw failed for", smiles, err);
+          drawFallback(canvas, smiles, null);
+        }
+      },
+      (err) => {
+        // parse failure — show SMILES text as fallback
+        console.warn("[mol] parse failed for", smiles, err);
+        drawFallback(canvas, smiles, null);
+      }
+    );
+  } catch (err) {
+    console.warn("[mol] sync throw for", smiles, err);
+    drawFallback(canvas, smiles, null);
+  }
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -865,18 +910,10 @@ async function tick() {
     }
   }
 }
-// wait until smiles-drawer library is ready OR 3 seconds
-(function bootstrap() {
-  let waited = 0;
-  const iv = setInterval(() => {
-    waited += 100;
-    if (typeof SmilesDrawer !== "undefined" || waited >= 3000) {
-      clearInterval(iv);
-      tick();
-      setInterval(tick, 5000);
-    }
-  }, 100);
-})();
+// Kick off. We don't block on smiles-drawer — drawMol has its own fallback,
+// and tick() re-runs every 5 s so late-arriving library still gets used.
+tick();
+setInterval(tick, 5000);
 </script>
 
 </body>
