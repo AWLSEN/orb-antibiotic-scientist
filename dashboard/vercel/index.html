@@ -865,6 +865,22 @@ footer .right { font-size: 0.72rem; color: var(--ink-faint); max-width: 440px; t
 })();
 
 /* ──────────────────────────────────────────────────────────
+   API base — makes the dashboard portable across mount points.
+   On Vercel direct (orb-antibiotic-scientist.vercel.app/) the page
+   pathname is "/" so API_BASE becomes "" and fetch("/api/state")
+   resolves correctly.
+   On the orbcloud.dev reverse proxy the page is served at
+   /use-cases/antibiotic-scientist[/] so absolute /api/state would
+   hit the ORB Cloud landing nginx instead of our dashboard. We
+   prepend the pathname so the request goes through the same proxy
+   location block that served the page itself.
+   ────────────────────────────────────────────────────────── */
+const API_BASE = window.location.pathname.replace(/\/$/, "");
+function api(path) {
+  return API_BASE + path;
+}
+
+/* ──────────────────────────────────────────────────────────
    helpers
    ────────────────────────────────────────────────────────── */
 const $ = (id) => document.getElementById(id);
@@ -1437,7 +1453,7 @@ async function tick() {
   try {
     // Stage 1: fast overview — fires renderStatus/metrics immediately
     // (~300ms-3s depending on cache warmth).
-    const r = await fetch("/api/state?t=" + Date.now(), { cache: "no-store" });
+    const r = await fetch(api("/api/state?t=" + Date.now()), { cache: "no-store" });
     if (!r.ok) throw new Error("HTTP " + r.status);
     const overview = await r.json();
     failStreak = 0;
@@ -1454,7 +1470,7 @@ async function tick() {
       (async () => {
         try {
           const dr = await fetch(
-            "/api/state?computer=" + encodeURIComponent(firstId) + "&t=" + Date.now(),
+            api("/api/state?computer=" + encodeURIComponent(firstId) + "&t=" + Date.now()),
             { cache: "no-store" }
           );
           if (dr.ok) {
