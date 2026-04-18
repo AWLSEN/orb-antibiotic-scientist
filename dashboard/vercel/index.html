@@ -744,6 +744,7 @@ footer .right { font-size: 0.72rem; color: var(--ink-faint); max-width: 440px; t
       <div class="hiw-legend">
         <span><span class="hiw-swatch working"></span>in a run</span>
         <span><span class="hiw-swatch waiting"></span>between runs (checkpointed)</span>
+        <span style="margin-left: auto; color: var(--ink);"><span id="hiw-fraction">—</span></span>
       </div>
       <div class="hiw-note" id="hiw-note" style="display:none;"></div>
 
@@ -1196,6 +1197,15 @@ function renderHowItWorks(state, detail) {
   let workingMsTotal = 0;
   for (const iv of intervals) workingMsTotal += (iv.to - iv.from);
   const workingHours = workingMsTotal / 3_600_000;
+
+  // Human-readable breakdown so the user can verify the bar at a glance
+  const workPct = Math.round((workingHours / wallHours) * 100);
+  function fmtHm(h) {
+    const m = Math.round(h * 60);
+    if (m < 60) return `${m}m`;
+    return `${Math.floor(m/60)}h ${m%60}m`;
+  }
+  $("hiw-fraction").textContent = `${fmtHm(workingHours)} in runs · ${fmtHm(wallHours - workingHours)} between · ${workPct}%`;
 
   const vpsCost = wallHours    * runtimeGb * RATE_RUNTIME_USD_PER_GBH;
   const orbCost = workingHours * runtimeGb * RATE_RUNTIME_USD_PER_GBH;

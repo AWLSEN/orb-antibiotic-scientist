@@ -39,8 +39,15 @@ ORB_API_KEY = os.environ.get("ORB_API_KEY", "").strip()
 # Short in-process cache so repeated polls from many clients don't hammer Orb.
 # Separate cache keys for overview vs detail-per-id.
 _CACHE: dict[str, dict] = {}
-_CACHE_TTL = 60.0   # 60 s staleness is invisible on the dashboard and halves Orb load
-_MAX_PARALLEL = 32  # Vercel function allows plenty of threads; bottleneck is Orb IO
+# Cache TTLs:
+#   _CACHE_TTL covers the full response (candidate list, events, usage).
+#   _STATE_TTL is a shorter-lived cache for just the agent_state field,
+#     which flips every few seconds and must stay fresh so the 'now'
+#     segment of the timeline matches what the user sees in the
+#     status pill.
+_CACHE_TTL = 30.0
+_STATE_TTL = 5.0
+_MAX_PARALLEL = 32
 
 
 def _orb_get(path: str, *, text: bool = False, timeout: int = 8):
@@ -415,17 +422,56 @@ def _aggregate(computer_id: str | None) -> dict:
     return out
 
 
+def _refresh_live_state(data: dict) -> dict:
+    """Replace the per-computer live agent_state with a fresh poll.
+
+    Called on every /api/state request that hits a cached response. Keeps
+    candidate list / events / usage from the cache (slow-changing) while
+    ensuring the status pill and timeline 'now' marker always reflect the
+    actual Orb state — not a 30-second-old snapshot.
+    """
+    comps = data.get("computers") or []
+    if not comps:
+        return data
+    for c in comps:
+        cid = c.get("id")
+        if not cid:
+            continue
+        try:
+            live = (_orb_get(f"/v1/computers/{cid}/agents") or {}).get("agents") or []
+            a = live[0] if live else {}
+            c["agent_state"] = a.get("state")
+            c["agent_pid"]   = a.get("pid")
+            c["agent_port"]  = a.get("port")
+        except Exception:
+            pass
+    data["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    return data
+
+
+_LIVE_CACHE: dict[str, dict] = {}
+
 def _get_cached(cache_key: str, computer_id: str | None) -> dict:
     now = time.time()
     cached = _CACHE.get(cache_key)
     if cached and (now - cached["t"]) < _CACHE_TTL:
-        return cached["data"]
+        # Return cached heavy data but refresh the live agent_state field.
+        # _LIVE_CACHE prevents the per-second poll from spamming Orb when
+        # many browser clients are connected.
+        live = _LIVE_CACHE.get(cache_key)
+        if not live or (now - live["t"]) >= _STATE_TTL:
+            refreshed = _refresh_live_state(json.loads(json.dumps(cached["data"])))
+            _LIVE_CACHE[cache_key] = {"t": now, "data": refreshed}
+            return refreshed
+        return live["data"]
+
     try:
         data = _aggregate(computer_id)
     except Exception as exc:
         data = {"error": f"aggregate crashed: {exc}",
                 "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     _CACHE[cache_key] = {"t": now, "data": data}
+    _LIVE_CACHE[cache_key] = {"t": now, "data": data}
     return data
 
 
