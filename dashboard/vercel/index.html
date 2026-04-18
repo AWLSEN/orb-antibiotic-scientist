@@ -310,21 +310,32 @@ header .live {
 @keyframes hiwpulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
 .hiw-timeline {
-  display: flex; gap: 2px; height: 36px; width: 100%;
+  display: flex; gap: 0; height: 36px; width: 100%;
   align-items: stretch; padding: 0;
-}
-.hiw-block {
-  flex: 1; height: 100%;
+  border-radius: 2px; overflow: hidden;
   background: hsl(30, 6%, 88%);
-  border-radius: 1px;
-  transition: background 300ms, transform 150ms;
 }
-.hiw-block.working { background: var(--accent); }
-.hiw-block.now {
-  background: var(--ink);
-  animation: hiwNow 1.1s ease-in-out infinite;
+.hiw-seg {
+  height: 100%; transition: background 300ms;
 }
+.hiw-seg.working { background: var(--accent); }
+.hiw-seg.idle    { background: hsl(30, 6%, 88%); }
+.hiw-seg.idle + .hiw-seg.working,
+.hiw-seg.working + .hiw-seg.idle {
+  border-left: 1px solid hsl(30, 6%, 78%);  /* subtle divider */
+}
+.hiw-seg.now-sleeping { background: hsl(220, 10%, 78%); }
+.hiw-seg.now-running  { background: var(--ink); animation: hiwNow 1.1s ease-in-out infinite; }
 @keyframes hiwNow { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+.hiw-note {
+  margin-top: 0.8rem; padding: 0.6rem 0.8rem;
+  border: 1px dashed var(--line);
+  border-radius: 3px;
+  font-size: 0.8rem; color: var(--ink-soft);
+  line-height: 1.45;
+}
+.hiw-note strong { color: var(--ink); font-weight: 700; }
 
 .hiw-axis {
   display: flex; justify-content: space-between;
@@ -731,9 +742,10 @@ footer .right { font-size: 0.72rem; color: var(--ink-faint); max-width: 440px; t
         <span>now</span>
       </div>
       <div class="hiw-legend">
-        <span><span class="hiw-swatch working"></span>working</span>
-        <span><span class="hiw-swatch waiting"></span>sleeping (checkpointed to disk)</span>
+        <span><span class="hiw-swatch working"></span>in a run</span>
+        <span><span class="hiw-swatch waiting"></span>between runs (checkpointed)</span>
       </div>
+      <div class="hiw-note" id="hiw-note" style="display:none;"></div>
 
       <div class="hiw-divider"></div>
 
@@ -1096,15 +1108,18 @@ function renderHowItWorks(state, detail) {
   const wallHours = wallSec / 3600;
   const runtimeGb = (comp.runtime_mb || 4096) / 1024;
 
-  // Build working intervals from this session's own events.
-  // We DON'T use org-wide /v1/usage.runtime_gb_hours because that number
-  // includes a previously-destroyed computer and inflates "billed" time.
+  // Build "in a run" intervals from events.
   const events = (detail && detail.events) || [];
+  const agentState = (comp.agent_state || "").toLowerCase();
+  const agentLive = agentState === "running";
+
   const intervals = [];
   let inRunSince = null;
+  let lastEventMs = sessionStartMs;
   for (const e of events) {
     const ms = new Date(e.ts).getTime();
     if (isNaN(ms)) continue;
+    lastEventMs = Math.max(lastEventMs, ms);
     if (e.kind === "run_start" || e.kind === "startup") {
       if (inRunSince === null) inRunSince = ms;
     } else if (e.kind === "run_end" || e.kind === "restart") {
@@ -1114,39 +1129,47 @@ function renderHowItWorks(state, detail) {
       }
     }
   }
-  const agentLive = (comp.agent_state || "").toLowerCase() === "running";
-  if (inRunSince !== null) intervals.push({ from: inRunSince, to: nowMs });
-
-  // Working seconds = sum of interval lengths clipped to window
-  let workingMsTotal = 0;
-  for (const iv of intervals) {
-    const lo = Math.max(iv.from, sessionStartMs);
-    const hi = Math.min(iv.to, nowMs);
-    if (hi > lo) workingMsTotal += (hi - lo);
-  }
-  const workingHours = workingMsTotal / 3_600_000;
-
-  // Bucket into N equal slices
-  const sliceMs = (nowMs - sessionStartMs) / N_SLICES;
-  const slicesWorking = new Array(N_SLICES).fill(false);
-  for (let i = 0; i < N_SLICES; i++) {
-    const sFrom = sessionStartMs + i * sliceMs;
-    const sTo = sFrom + sliceMs;
-    let wMs = 0;
-    for (const iv of intervals) {
-      const lo = Math.max(iv.from, sFrom);
-      const hi = Math.min(iv.to, sTo);
-      if (hi > lo) wMs += (hi - lo);
-    }
-    slicesWorking[i] = wMs > (sliceMs * 0.5);
+  // Trailing run_start with no run_end:
+  //   - if agent is currently 'running' → extend to now
+  //   - otherwise → close at the last event timestamp (agent has since
+  //     been checkpointed/stopped; we shouldn't pretend it's still in a run)
+  if (inRunSince !== null) {
+    intervals.push({ from: inRunSince, to: agentLive ? nowMs : lastEventMs });
   }
 
-  // Render timeline
+  // Render timeline as PROPORTIONAL segments, not equal-width buckets —
+  // otherwise short 30 s idle gaps between runs get absorbed into
+  // majority-working buckets and the bar ends up all orange even though
+  // the agent technically did checkpoint between each run.
+  const segments = [];
+  let cursor = sessionStartMs;
+  for (const iv of intervals.sort((a, b) => a.from - b.from)) {
+    if (iv.from > cursor) segments.push({ from: cursor, to: iv.from, working: false });
+    segments.push({ from: Math.max(iv.from, cursor), to: iv.to, working: true });
+    cursor = Math.max(cursor, iv.to);
+  }
+  if (cursor < nowMs) segments.push({ from: cursor, to: nowMs, working: false });
+
+  const totalMs = nowMs - sessionStartMs;
+  // Make every segment at least 1 px visible by enforcing a minimum flex
+  // of 0.4% — useful for short 30 s gaps. This slightly distorts scale
+  // but communicates the structure.
+  const MIN_PCT = 0.4;
   const tl = $("hiw-timeline");
-  const wantHtml = slicesWorking.map((w, i) => {
-    const isNow = i === N_SLICES - 1 && agentLive;
-    const cls = isNow ? "hiw-block now" : (w ? "hiw-block working" : "hiw-block");
-    return `<div class="${cls}" title="slice ${i+1}/${N_SLICES}"></div>`;
+  const isNowSleeping = (agentState === "checkpointed" || agentState === "frozen" || agentState === "sleeping");
+  const wantHtml = segments.map((s, i) => {
+    const pct = Math.max(MIN_PCT, ((s.to - s.from) / totalMs) * 100);
+    // mark the trailing segment specially to mirror the status pill
+    let cls = s.working ? "hiw-seg working" : "hiw-seg idle";
+    if (i === segments.length - 1) {
+      if (isNowSleeping) cls = "hiw-seg now-sleeping";
+      else if (agentLive && s.working) cls = "hiw-seg now-running";
+    }
+    const durS = Math.max(0, Math.round((s.to - s.from) / 1000));
+    const title = s.working
+      ? `in a run · ${durS < 60 ? durS + 's' : Math.round(durS/60)+'m'}`
+      : `checkpointed · ${durS < 60 ? durS + 's' : Math.round(durS/60)+'m'}`;
+    return `<div class="${cls}" style="flex:${pct.toFixed(3)}" title="${title}"></div>`;
   }).join("");
   if (tl.dataset.last !== wantHtml) {
     tl.innerHTML = wantHtml;
@@ -1162,15 +1185,18 @@ function renderHowItWorks(state, detail) {
   $("hiw-ax-start").textContent = startTxt;
   $("hiw-ax-mid").textContent = "";
 
-  // state chip
-  const s = (comp.agent_state || "").toLowerCase();
+  // state chip (right side)
   const dot = $("hiw-dot"), lbl = $("hiw-state-label");
-  if (s === "running") { dot.classList.remove("idle"); lbl.textContent = "WORKING"; }
-  else if (s === "dumping" || s === "checkpointing") { dot.classList.remove("idle"); lbl.textContent = "PARKING"; }
-  else if (s === "frozen" || s === "checkpointed") { dot.classList.add("idle"); lbl.textContent = "SLEEPING"; }
-  else { dot.classList.add("idle"); lbl.textContent = (s || "—").toUpperCase(); }
+  if (agentLive) { dot.classList.remove("idle"); lbl.textContent = "IN A RUN"; }
+  else if (agentState === "dumping" || agentState === "checkpointing") { dot.classList.remove("idle"); lbl.textContent = "CHECKPOINTING"; }
+  else if (isNowSleeping) { dot.classList.add("idle"); lbl.textContent = "BETWEEN RUNS"; }
+  else { dot.classList.add("idle"); lbl.textContent = (agentState || "—").toUpperCase(); }
 
-  // Costs — same per-hour rate on both sides, only the duration differs.
+  // Real working time = sum of interval durations
+  let workingMsTotal = 0;
+  for (const iv of intervals) workingMsTotal += (iv.to - iv.from);
+  const workingHours = workingMsTotal / 3_600_000;
+
   const vpsCost = wallHours    * runtimeGb * RATE_RUNTIME_USD_PER_GBH;
   const orbCost = workingHours * runtimeGb * RATE_RUNTIME_USD_PER_GBH;
 
@@ -1192,11 +1218,17 @@ function renderHowItWorks(state, detail) {
   $("hiw-vps-bar").style.width = "100%";
   $("hiw-orb-bar").style.width = Math.max(2, (orbCost / maxCost) * 100).toFixed(1) + "%";
 
+  // Honest punchline. When savings are tiny (our agent runs near-
+  // constantly), say so rather than fake a "% cheaper" that isn't there.
   const savingPct = Math.round(100 * (1 - orbCost / (vpsCost || 1)));
+  const note = $("hiw-note");
   if (savingPct > 20) {
     $("hiw-punchline").textContent = `Orb is ${savingPct}% cheaper — same rate, less meter`;
+    note.style.display = "none";
   } else {
     $("hiw-punchline").textContent = "Same per-hour rate, different meter";
+    note.style.display = "";
+    note.innerHTML = `<strong>This particular agent</strong> runs almost back-to-back — it starts a new Claude run 30 seconds after the last one ends. Orb checkpoints between runs, but the savings compound most on agents that wait on human input, slow web scrapes, or external APIs. For this workload the bill tracks wall-clock closely.`;
   }
 }
 
