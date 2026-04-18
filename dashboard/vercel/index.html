@@ -256,158 +256,147 @@ header .live {
 }
 @media (max-width: 640px) { .status-cta { align-items: center; } }
 
-/* ── HOW IT WORKS (dark "bill for working" block) ───────── */
+/* ── HOW IT WORKS (same light theme as the rest of the page) ── */
 .hiw {
-  background: hsl(20, 10%, 10%);
-  color: hsl(40, 10%, 92%);
-  border-radius: 8px;
-  padding: 2.4rem 2.2rem 2rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 6px;
+  padding: 1.6rem 1.8rem 1.4rem;
   margin-bottom: 2.4rem;
-  position: relative;
-  overflow: hidden;
 }
 .hiw-head {
-  display: flex; align-items: center; gap: 1rem;
-  font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace;
-  font-size: 0.7rem; letter-spacing: 0.14em;
-  color: hsl(40, 8%, 60%); text-transform: uppercase;
-  margin-bottom: 1.4rem;
+  display: flex; align-items: center; gap: 0.9rem;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.66rem; letter-spacing: 0.2em;
+  color: var(--ink-faint); text-transform: uppercase;
+  margin-bottom: 0.4rem; font-weight: 700;
 }
-.hiw-num { color: var(--accent); font-weight: 700; }
-.hiw-rule { flex: 0 0 80px; height: 1px; background: hsl(20, 8%, 28%); }
-.hiw-eyebrow { font-weight: 400; }
+.hiw-num { color: var(--accent); }
+.hiw-rule { flex: 0 0 44px; height: 1px; background: var(--line-2); }
+.hiw-eyebrow { font-weight: 700; }
 
 .hiw-title {
-  font-family: var(--serif); font-weight: 400;
-  font-size: clamp(1.9rem, 4.5vw, 2.8rem);
-  line-height: 1.05; letter-spacing: -0.02em;
-  color: hsl(40, 15%, 96%);
-  margin-bottom: 2rem;
+  font-family: var(--serif); font-weight: 500;
+  font-size: 1.35rem; line-height: 1.3;
+  color: var(--ink); letter-spacing: -0.01em;
+  margin-bottom: 1.4rem;
+  max-width: 560px;
 }
 
 .hiw-stage {
-  background: hsl(20, 10%, 7%);
-  border: 1px solid hsl(20, 8%, 18%);
-  border-radius: 6px;
-  padding: 1.6rem 1.8rem 1.5rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1.2rem 1.4rem 1.2rem;
 }
 .hiw-caption {
   display: flex; justify-content: space-between; align-items: baseline;
-  font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace;
-  font-size: 0.82rem; color: hsl(40, 8%, 68%);
-  margin-bottom: 0.9rem; flex-wrap: wrap; gap: 0.5rem;
+  font-size: 0.84rem; color: var(--ink-soft);
+  margin-bottom: 0.7rem; flex-wrap: wrap; gap: 0.5rem;
 }
-.hiw-caption em { color: hsl(40, 15%, 96%); font-style: normal; font-weight: 500; }
+.hiw-caption em { color: var(--ink); font-style: normal; font-weight: 700; }
 .hiw-state {
-  font-size: 0.72rem; letter-spacing: 0.14em;
-  color: var(--accent); text-transform: uppercase;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.68rem; letter-spacing: 0.14em;
+  color: var(--accent); text-transform: uppercase; font-weight: 700;
 }
 .hiw-dot {
-  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
-  background: var(--accent); margin-right: 0.4rem;
-  box-shadow: 0 0 6px var(--accent);
-  animation: hiwpulse 2s ease-in-out infinite; vertical-align: 2px;
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); margin-right: 0.35rem;
+  box-shadow: 0 0 4px var(--accent);
+  animation: hiwpulse 2s ease-in-out infinite; vertical-align: 1px;
 }
-.hiw-dot.idle { background: hsl(40, 8%, 45%); box-shadow: none; animation: none; }
-@keyframes hiwpulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+.hiw-dot.idle { background: var(--ink-faint); box-shadow: none; animation: none; }
+@keyframes hiwpulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
 .hiw-timeline {
-  display: flex; gap: 1px; height: 90px; width: 100%;
-  align-items: flex-end;
-  padding: 12px 0 10px;
-  border-bottom: 1px solid hsl(20, 8%, 22%);
+  display: flex; gap: 2px; height: 36px; width: 100%;
+  align-items: stretch; padding: 0;
 }
 .hiw-block {
   flex: 1; height: 100%;
-  background: hsl(20, 6%, 20%);
+  background: hsl(30, 6%, 88%);
   border-radius: 1px;
   transition: background 300ms, transform 150ms;
 }
-.hiw-block.working {
-  background: var(--accent);
-}
-.hiw-block.working:hover { transform: scaleY(1.05); }
+.hiw-block.working { background: var(--accent); }
 .hiw-block.now {
-  background: hsl(40, 15%, 96%);
+  background: var(--ink);
   animation: hiwNow 1.1s ease-in-out infinite;
 }
-@keyframes hiwNow { 0%,100%{opacity:1} 50%{opacity:0.55} }
+@keyframes hiwNow { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
 .hiw-axis {
   display: flex; justify-content: space-between;
   font-family: ui-monospace, Menlo, monospace;
-  font-size: 0.7rem; color: hsl(40, 8%, 54%);
-  margin-top: 0.5rem;
+  font-size: 0.68rem; color: var(--ink-faint);
+  margin-top: 0.45rem;
 }
 
 .hiw-legend {
-  display: flex; gap: 1.8rem; margin-top: 1rem;
-  font-family: ui-monospace, Menlo, monospace;
-  font-size: 0.74rem; color: hsl(40, 8%, 68%);
+  display: flex; gap: 1.4rem; margin-top: 0.8rem;
+  font-size: 0.78rem; color: var(--ink-soft);
 }
 .hiw-swatch {
-  display: inline-block; width: 14px; height: 10px;
-  vertical-align: middle; margin-right: 0.4rem;
+  display: inline-block; width: 12px; height: 8px;
+  vertical-align: middle; margin-right: 0.35rem;
 }
 .hiw-swatch.working { background: var(--accent); }
-.hiw-swatch.waiting { background: hsl(20, 6%, 20%); }
+.hiw-swatch.waiting { background: hsl(30, 6%, 88%); }
 
 .hiw-divider {
-  height: 1px; background: hsl(20, 8%, 22%);
-  margin: 1.8rem 0 1.4rem;
+  height: 1px; background: var(--line);
+  margin: 1.2rem 0 1rem;
 }
 
 .hiw-cost {
-  display: flex; flex-direction: column; gap: 1.3rem;
-  margin-bottom: 1.2rem;
+  display: flex; flex-direction: column; gap: 0.8rem;
+  margin-bottom: 0.9rem;
 }
 .hiw-cost-row {
-  display: grid; grid-template-columns: minmax(200px, 1.4fr) 1fr auto;
-  gap: 1.2rem; align-items: center;
+  display: grid; grid-template-columns: minmax(180px, 1.4fr) 1fr auto;
+  gap: 1.1rem; align-items: center;
 }
 @media (max-width: 640px) {
   .hiw-cost-row { grid-template-columns: 1fr auto; }
   .hiw-cost-bar { grid-column: 1 / -1; order: 3; }
 }
 .hiw-cost-label {
-  font-family: ui-monospace, Menlo, monospace;
-  font-size: 0.84rem; color: hsl(40, 10%, 80%);
+  font-size: 0.86rem; color: var(--ink);
 }
 .hiw-cost-label .hiw-cost-sub {
-  color: hsl(40, 8%, 52%); font-size: 0.8em;
+  color: var(--ink-soft); font-size: 0.78em;
   display: inline-block; margin-left: 0.2rem;
 }
 .hiw-cost-bar {
-  height: 4px; background: hsl(20, 6%, 20%); border-radius: 2px;
+  height: 3px; background: var(--surface-2); border-radius: 2px;
   position: relative; overflow: hidden;
 }
 .hiw-bar-fill {
   height: 100%; border-radius: 2px;
   transition: width 600ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.hiw-bar-fill.vps { background: hsl(40, 10%, 60%); }
+.hiw-bar-fill.vps { background: var(--ink-faint); }
 .hiw-bar-fill.orb { background: var(--accent); }
 .hiw-cost-amt {
-  font-family: var(--serif); font-weight: 400;
-  font-size: 1.9rem; color: hsl(40, 15%, 96%);
+  font-family: var(--serif); font-weight: 500;
+  font-size: 1.35rem; color: var(--ink);
   line-height: 1; white-space: nowrap;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
 }
 .hiw-cost-amt.accent { color: var(--accent); }
 .hiw-cost-amt .c-sign {
-  font-size: 0.6em; color: hsl(40, 8%, 62%);
-  margin-right: 0.1rem; vertical-align: 0.4em;
+  font-size: 0.62em; color: var(--ink-soft);
+  margin-right: 0.08rem; vertical-align: 0.4em;
 }
-.hiw-cost-amt.accent .c-sign { color: hsl(24, 50%, 62%); }
 
 .hiw-footer {
   display: flex; justify-content: space-between;
-  font-family: ui-monospace, Menlo, monospace;
-  font-size: 0.78rem; color: hsl(40, 8%, 54%);
+  font-size: 0.78rem; color: var(--ink-soft);
   flex-wrap: wrap; gap: 0.6rem;
-  padding-top: 1rem; border-top: 1px solid hsl(20, 8%, 18%);
+  padding-top: 0.8rem; border-top: 1px solid var(--line);
 }
-.hiw-footer .accent { color: var(--accent); }
+.hiw-footer .accent { color: var(--accent); font-weight: 700; }
 
 /* ── EXPERIMENTS SECTION ────────────────────────────────── */
 .section-label {
@@ -1097,8 +1086,6 @@ const RATE_DISK_USD_PER_GBH    = 0.001;
 
 function renderHowItWorks(state, detail) {
   const comp = (state.computers || [])[0] || {};
-  const u = state.usage || {};
-
   const nowMs = Date.now();
   const sessionStartMs = comp.session_started_at
     ? new Date(comp.session_started_at).getTime()
@@ -1107,15 +1094,13 @@ function renderHowItWorks(state, detail) {
 
   const wallSec = Math.max(1, (nowMs - sessionStartMs) / 1000);
   const wallHours = wallSec / 3600;
+  const runtimeGb = (comp.runtime_mb || 4096) / 1024;
 
-  // real billed hours (runtime_gb_hours normalized to our computer's GB)
-  const runtimeGbh = Number(u.runtime_gb_hours || 0);
-  const runtimeGb  = (comp.runtime_mb || 4096) / 1024;
-  const billedHours = Math.min(wallHours, runtimeGbh / runtimeGb);
-
-  // Parse events (from detail.events) into run intervals
+  // Build working intervals from this session's own events.
+  // We DON'T use org-wide /v1/usage.runtime_gb_hours because that number
+  // includes a previously-destroyed computer and inflates "billed" time.
   const events = (detail && detail.events) || [];
-  const intervals = [];  // [{from, to}]
+  const intervals = [];
   let inRunSince = null;
   for (const e of events) {
     const ms = new Date(e.ts).getTime();
@@ -1129,61 +1114,65 @@ function renderHowItWorks(state, detail) {
       }
     }
   }
-  // trailing — if currently running, extend to now
+  const agentLive = (comp.agent_state || "").toLowerCase() === "running";
   if (inRunSince !== null) intervals.push({ from: inRunSince, to: nowMs });
 
-  // Bucket into N equal slices; colour each by whether the run intervals
-  // cover ≥ half of the slice.
+  // Working seconds = sum of interval lengths clipped to window
+  let workingMsTotal = 0;
+  for (const iv of intervals) {
+    const lo = Math.max(iv.from, sessionStartMs);
+    const hi = Math.min(iv.to, nowMs);
+    if (hi > lo) workingMsTotal += (hi - lo);
+  }
+  const workingHours = workingMsTotal / 3_600_000;
+
+  // Bucket into N equal slices
   const sliceMs = (nowMs - sessionStartMs) / N_SLICES;
   const slicesWorking = new Array(N_SLICES).fill(false);
   for (let i = 0; i < N_SLICES; i++) {
     const sFrom = sessionStartMs + i * sliceMs;
     const sTo = sFrom + sliceMs;
-    let workingMs = 0;
+    let wMs = 0;
     for (const iv of intervals) {
       const lo = Math.max(iv.from, sFrom);
       const hi = Math.min(iv.to, sTo);
-      if (hi > lo) workingMs += (hi - lo);
+      if (hi > lo) wMs += (hi - lo);
     }
-    slicesWorking[i] = workingMs > (sliceMs * 0.5);
+    slicesWorking[i] = wMs > (sliceMs * 0.5);
   }
 
   // Render timeline
   const tl = $("hiw-timeline");
-  tl.innerHTML = slicesWorking.map((w, i) => {
-    const isNow = i === N_SLICES - 1 && (comp.agent_state || "").toLowerCase() === "running";
+  const wantHtml = slicesWorking.map((w, i) => {
+    const isNow = i === N_SLICES - 1 && agentLive;
     const cls = isNow ? "hiw-block now" : (w ? "hiw-block working" : "hiw-block");
     return `<div class="${cls}" title="slice ${i+1}/${N_SLICES}"></div>`;
   }).join("");
-
-  // axis labels
-  const sessionHoursAgo = wallHours;
-  const startTxt = sessionHoursAgo < 1
-    ? `${Math.round(sessionHoursAgo * 60)} min ago`
-    : sessionHoursAgo < 24
-      ? `${Math.round(sessionHoursAgo)} hr ago`
-      : `${Math.round(sessionHoursAgo / 24)} day${sessionHoursAgo < 48 ? "" : "s"} ago`;
-  $("hiw-ax-start").textContent = startTxt;
-  $("hiw-ax-mid").textContent = "";   // leave blank; the feel is clearer without
-
-  // state chip (live)
-  const s = (comp.agent_state || "").toLowerCase();
-  const dot = $("hiw-dot"), lbl = $("hiw-state-label");
-  if (s === "running") {
-    dot.classList.remove("idle"); lbl.textContent = "WORKING";
-  } else if (s === "dumping" || s === "checkpointing") {
-    dot.classList.remove("idle"); lbl.textContent = "PARKING";
-  } else if (s === "frozen" || s === "checkpointed") {
-    dot.classList.add("idle"); lbl.textContent = "SLEEPING";
-  } else {
-    dot.classList.add("idle"); lbl.textContent = (s || "—").toUpperCase();
+  if (tl.dataset.last !== wantHtml) {
+    tl.innerHTML = wantHtml;
+    tl.dataset.last = wantHtml;
   }
 
-  // Costs — real, based on same per-GB-hour rate for both sides
-  const vpsCost = wallHours * runtimeGb * RATE_RUNTIME_USD_PER_GBH;
-  const orbCost = (billedHours * runtimeGb * RATE_RUNTIME_USD_PER_GBH)
-                + (Number(u.disk_gb_hours || 0) * RATE_DISK_USD_PER_GBH * 0); // disk is same on both
-  // Actually both would have disk; simpler: compare runtime-only to highlight the checkpointing effect.
+  // axis labels
+  const startTxt = wallHours < 1
+    ? `${Math.round(wallHours * 60)} min ago`
+    : wallHours < 24
+      ? `${Math.round(wallHours)} hr ago`
+      : `${Math.round(wallHours / 24)} day${wallHours < 48 ? "" : "s"} ago`;
+  $("hiw-ax-start").textContent = startTxt;
+  $("hiw-ax-mid").textContent = "";
+
+  // state chip
+  const s = (comp.agent_state || "").toLowerCase();
+  const dot = $("hiw-dot"), lbl = $("hiw-state-label");
+  if (s === "running") { dot.classList.remove("idle"); lbl.textContent = "WORKING"; }
+  else if (s === "dumping" || s === "checkpointing") { dot.classList.remove("idle"); lbl.textContent = "PARKING"; }
+  else if (s === "frozen" || s === "checkpointed") { dot.classList.add("idle"); lbl.textContent = "SLEEPING"; }
+  else { dot.classList.add("idle"); lbl.textContent = (s || "—").toUpperCase(); }
+
+  // Costs — same per-hour rate on both sides, only the duration differs.
+  const vpsCost = wallHours    * runtimeGb * RATE_RUNTIME_USD_PER_GBH;
+  const orbCost = workingHours * runtimeGb * RATE_RUNTIME_USD_PER_GBH;
 
   function fmtCost(v) {
     if (v < 0.01) return { amt: (v * 100).toFixed(1), sign: "¢" };
@@ -1199,15 +1188,13 @@ function renderHowItWorks(state, detail) {
   if (vpsSignEl) vpsSignEl.textContent = vpsFmt.sign;
   if (orbSignEl) orbSignEl.textContent = orbFmt.sign;
 
-  // Bar widths: VPS always 100%, Orb scaled to its fraction
   const maxCost = Math.max(vpsCost, 0.0001);
   $("hiw-vps-bar").style.width = "100%";
   $("hiw-orb-bar").style.width = Math.max(2, (orbCost / maxCost) * 100).toFixed(1) + "%";
 
-  // Punchline
   const savingPct = Math.round(100 * (1 - orbCost / (vpsCost || 1)));
   if (savingPct > 20) {
-    $("hiw-punchline").textContent = `Orb costs ${savingPct}% less — same work, less meter`;
+    $("hiw-punchline").textContent = `Orb is ${savingPct}% cheaper — same rate, less meter`;
   } else {
     $("hiw-punchline").textContent = "Same per-hour rate, different meter";
   }
