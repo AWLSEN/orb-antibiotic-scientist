@@ -39,15 +39,20 @@ ORB_API_KEY = os.environ.get("ORB_API_KEY", "").strip()
 # Short in-process cache so repeated polls from many clients don't hammer Orb.
 # Separate cache keys for overview vs detail-per-id.
 _CACHE: dict[str, dict] = {}
-# Cache TTLs:
-#   _CACHE_TTL covers the full response (candidate list, events, usage).
-#   _STATE_TTL is a shorter-lived cache for just the agent_state field,
-#     which flips every few seconds and must stay fresh so the 'now'
-#     segment of the timeline matches what the user sees in the
-#     status pill.
-_CACHE_TTL = 30.0
-_STATE_TTL = 5.0
+# Cache TTLs.
+_CACHE_TTL = 30.0            # full response (detail, usage)
+_STATE_TTL = 5.0             # just the live agent_state field
+_CANDIDATE_COMPLETE_TTL = 3600.0  # 1 hour — if a candidate has redteam.json / scored.json it's immutable
+_CANDIDATE_ACTIVE_TTL  = 60.0     # 60s — candidates still being processed
 _MAX_PARALLEL = 32
+
+# Module-level cache of per-candidate payloads. Keyed by candidate dir name.
+# Each entry: {t: ts, data: {...}, complete: bool}
+# Since a 'complete' candidate never changes, we can cache it for an hour+.
+# An 'active' (still running) candidate can move through gates, so refresh
+# every 60s. This eliminates >90% of per-candidate Orb round-trips on every
+# subsequent poll.
+_CAND_CACHE: dict[str, dict] = {}
 
 
 def _orb_get(path: str, *, text: bool = False, timeout: int = 8):
@@ -234,10 +239,16 @@ def _summary_for_computer(c: dict) -> dict:
 def _load_one_candidate(cid: str, name: str) -> dict:
     """Fetch the files needed to derive a candidate's experiment status.
 
-    Issues 2–5 Orb file requests per candidate. Called in parallel via
-    a thread pool to keep total latency bounded by the slowest request
-    rather than the sum.
+    Caches aggressively: 1 h for completed candidates (immutable once
+    redteam.json or scored.json exists), 60 s for active ones.
     """
+    now = time.time()
+    cached = _CAND_CACHE.get(name)
+    if cached:
+        ttl = _CANDIDATE_COMPLETE_TTL if cached.get("complete") else _CANDIDATE_ACTIVE_TTL
+        if (now - cached["t"]) < ttl:
+            return cached["data"]
+
     base = f"agent/code/findings/candidates/{name}"
     inner = _file_dir(cid, base)
     artifacts = [f.get("name") for f in inner if f.get("type") == "file"]
@@ -292,7 +303,7 @@ def _load_one_candidate(cid: str, name: str) -> dict:
             status = "failed"
             reason = scored.get("veto_reason") or "vetoed by pipeline"
 
-    return {
+    data = {
         "candidate_id": meta.get("candidate_id") or name,
         "name": meta.get("name"),
         "designed_at": meta.get("designed_at"),
@@ -305,6 +316,13 @@ def _load_one_candidate(cid: str, name: str) -> dict:
         "passed_gates": passed_gates,
         "total_gates": total_gates,
     }
+
+    # A candidate is "complete" once it has been through the full chain
+    # (scored.json or redteam.json — both mean no more changes).
+    is_complete = ("scored.json" in has) or ("redteam.json" in has)
+    _CAND_CACHE[name] = {"t": now, "data": data, "complete": is_complete}
+
+    return data
 
 
 def _load_candidate_list(cid: str, limit: int = 18) -> list[dict]:

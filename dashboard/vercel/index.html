@@ -1430,26 +1430,44 @@ document.addEventListener("keydown", (e) => {
    fetch loop
    ────────────────────────────────────────────────────────── */
 let failStreak = 0;
+let lastDetail = null;  // remember last detail so repeat polls don't re-blank the grid
+let detailInflight = false;
+
 async function tick() {
   try {
-    // cheap overview + auto-drill on first computer
-    let r = await fetch("/api/state?t=" + Date.now(), { cache: "no-store" });
+    // Stage 1: fast overview — fires renderStatus/metrics immediately
+    // (~300ms-3s depending on cache warmth).
+    const r = await fetch("/api/state?t=" + Date.now(), { cache: "no-store" });
     if (!r.ok) throw new Error("HTTP " + r.status);
-    let state = await r.json();
-    const firstId = ((state.computers || [])[0] || {}).id;
-    let detail = null;
-    if (firstId) {
-      r = await fetch("/api/state?computer=" + encodeURIComponent(firstId) + "&t=" + Date.now(), { cache: "no-store" });
-      if (r.ok) {
-        const full = await r.json();
-        detail = full.detail || null;
-        state = full;
-      }
-    }
+    const overview = await r.json();
     failStreak = 0;
-    renderStatus(state);
-    renderHowItWorks(state, detail);
-    renderExperiments(detail ? detail.candidates_list : []);
+
+    renderStatus(overview);
+    renderHowItWorks(overview, lastDetail);
+    if (lastDetail) renderExperiments(lastDetail.candidates_list);
+
+    // Stage 2: heavy detail — runs in the background, doesn't block the
+    // status-pill / hero / stats re-render. Can take 2-12s cold.
+    const firstId = ((overview.computers || [])[0] || {}).id;
+    if (firstId && !detailInflight) {
+      detailInflight = true;
+      (async () => {
+        try {
+          const dr = await fetch(
+            "/api/state?computer=" + encodeURIComponent(firstId) + "&t=" + Date.now(),
+            { cache: "no-store" }
+          );
+          if (dr.ok) {
+            const full = await dr.json();
+            lastDetail = full.detail || null;
+            renderStatus(full);
+            renderHowItWorks(full, lastDetail);
+            renderExperiments(lastDetail ? lastDetail.candidates_list : []);
+          }
+        } catch (_) { /* keep last detail on transient failure */ }
+        finally { detailInflight = false; }
+      })();
+    }
   } catch (e) {
     failStreak++;
     if (failStreak >= 3) {
