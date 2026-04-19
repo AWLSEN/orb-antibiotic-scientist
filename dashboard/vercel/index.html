@@ -743,18 +743,18 @@ footer .right { font-size: 0.72rem; color: var(--ink-faint); max-width: 440px; t
         </div>
         <div class="hiw-stat">
           <div class="hiw-stat-val" id="hiw-stat-inrun">—</div>
-          <div class="hiw-stat-lbl">time in Claude runs</div>
-          <div class="hiw-stat-sub" id="hiw-stat-inrun-sub">from agent log</div>
+          <div class="hiw-stat-lbl">billed active time</div>
+          <div class="hiw-stat-sub" id="hiw-stat-inrun-sub">container awake (Orb stats)</div>
         </div>
         <div class="hiw-stat">
           <div class="hiw-stat-val" id="hiw-stat-cycles">—</div>
           <div class="hiw-stat-lbl">checkpoint cycles</div>
-          <div class="hiw-stat-sub">Orb froze / woke the container (30-day total)</div>
+          <div class="hiw-stat-sub">this computer froze / thawed (30-day)</div>
         </div>
       </div>
 
       <div class="hiw-footer">
-        <span>Orb's billing is per-computer but only exposed org-wide, so we don't claim a session-level $ figure — the checkpoint count is what Orb reports and it's real.</span>
+        <span>Numbers come from Orb's per-computer <code>/stats</code> endpoint — identical math to admin.orbcloud.dev. Billing: $0.005/GB-hr runtime + $0.05/GB-month disk.</span>
       </div>
     </div>
   </section>
@@ -1083,20 +1083,24 @@ function renderStatus(state) {
 
 /* ──────────────────────────────────────────────────────────
    "how it works" — bill for working, not waiting
-   All figures derive from real data:
-     - timeline: parse log events, bucket wall-clock into N slices,
-       colour each slice by whether the agent was in a run during it
-     - working time: runtime_gb_hours / runtime_gb (real Orb billing)
-     - wall time: now − session_started_at
-     - VPS cost: wall_hours × runtime_gb × rate
-     - Orb cost:  billed_hours × runtime_gb × rate  +  disk × rate
-   Both costs use the same per-hour rate. That's the point: Orb's
-   metered seconds are the same price — there are just fewer of them.
-   ────────────────────────────────────────────────────────── */
+   Numbers come from Orb's per-computer /v1/computers/{id}/stats
+   endpoint (attached to each computer as `stats`). Same math as
+   admin.orbcloud.dev so figures reconcile exactly.
 
-const N_SLICES = 80;
-const RATE_RUNTIME_USD_PER_GBH = 0.03;
-const RATE_DISK_USD_PER_GBH    = 0.001;
+   Fields used:
+     stats.wall_secs       — session wall-clock (seconds)
+     stats.active_secs     — time the container was actually running
+     stats.sleep_pct       — % of wall-clock the container was frozen
+     stats.checkpoints     — checkpoint cycles (per-computer, 30 d)
+     stats.llm_calls       — Claude API calls the agent made
+     stats.est_cost_usd    — billed $, computed by Orb at $0.005/GB-hr
+                             runtime + $0.05/GB-month disk
+     stats.avg_restore_ms  — mean time to thaw the container
+
+   Timeline bar is still derived from the agent's own log events
+   (we need per-run boundaries to paint the bar, which the stats
+   endpoint doesn't expose) — numeric stats use the Orb endpoint.
+   ────────────────────────────────────────────────────────── */
 
 function renderHowItWorks(state, detail) {
   const comp = (state.computers || [])[0] || {};
@@ -1194,10 +1198,20 @@ function renderHowItWorks(state, detail) {
   else if (isNowSleeping) { dot.classList.add("idle"); lbl.textContent = "BETWEEN RUNS"; }
   else { dot.classList.add("idle"); lbl.textContent = (agentState || "—").toUpperCase(); }
 
-  // Real in-run time from this session's event log
-  let workingMsTotal = 0;
-  for (const iv of intervals) workingMsTotal += (iv.to - iv.from);
-  const workingHours = workingMsTotal / 3_600_000;
+  // Per-computer stats from Orb's /v1/computers/{id}/stats (30-day window).
+  // These numbers reconcile with admin.orbcloud.dev exactly.
+  const stats = comp.stats || {};
+  const activeSec   = Number(stats.active_secs   ?? 0);
+  const sleepPct    = Number(stats.sleep_pct     ?? 0);
+  const activePct   = stats.active_pct != null ? Number(stats.active_pct) : (100 - sleepPct);
+  const checkpoints = Number(stats.checkpoints   ?? 0);
+  const llmCalls    = Number(stats.llm_calls     ?? 0);
+  const estCostUsd  = Number(stats.est_cost_usd  ?? 0);
+  const avgRestore  = Number(stats.avg_restore_ms ?? 0);
+  const statsWallSec = Number(stats.wall_secs    ?? wallSec);
+
+  const workingHours = activeSec / 3600;
+  const statsWallHours = statsWallSec / 3600;
 
   function fmtHm(h) {
     const totalMin = Math.round(h * 60);
@@ -1205,26 +1219,30 @@ function renderHowItWorks(state, detail) {
     return `${Math.floor(totalMin/60)} h ${totalMin%60} m`;
   }
 
-  const workPct = Math.round((workingHours / wallHours) * 100);
-  $("hiw-fraction").textContent = `${fmtHm(workingHours)} in runs · ${workPct}%`;
+  const workPct = Math.round(activePct);
+  $("hiw-fraction").textContent = `${fmtHm(workingHours)} active · ${workPct}% of wall-clock`;
 
-  // Verifiable stats, no derived $ numbers we can't defend
-  $("hiw-stat-session").textContent = fmtHm(wallHours);
+  // Real Orb billing — identical to admin.orbcloud.dev
+  $("hiw-stat-session").textContent = fmtHm(statsWallHours || wallHours);
   $("hiw-stat-inrun").textContent = fmtHm(workingHours);
-  $("hiw-stat-inrun-sub").textContent =
-    `${intervals.length} complete runs · ${workPct}% of session`;
+  $("hiw-stat-inrun-sub").textContent = stats.wall_secs != null
+    ? `${sleepPct.toFixed(1)}% asleep · ${llmCalls.toLocaleString()} LLM calls`
+    : `${intervals.length} complete runs (from log)`;
 
-  // checkpoint_cycles is org-wide 30-day total from Orb — we're honest about that.
-  const cycles = (state.usage || {}).checkpoint_cycles;
-  $("hiw-stat-cycles").textContent = cycles != null ? cycles.toLocaleString() : "—";
+  // Per-computer checkpoints + $ — reconciles with admin dashboard
+  $("hiw-stat-cycles").textContent = checkpoints > 0
+    ? `${checkpoints.toLocaleString()}`
+    : "—";
 
-  // Note is always shown now — explains the missing $ figure honestly.
   const note = $("hiw-note");
-  note.style.display = "";
-  if (workPct > 90) {
-    note.innerHTML = `<strong>This agent runs almost back-to-back.</strong> It starts a new Claude run ~30 seconds after the last one ends, so the bar is mostly orange. Orb can still freeze the container <em>during</em> a run while waiting on LLM responses (that's where the ${cycles || "many"} checkpoint cycles come from) — but Orb only exposes that billing at the account level, so we show the counts above rather than a misleading per-session dollar figure.`;
+  if (stats.wall_secs != null) {
+    note.style.display = "";
+    const costStr = `$${estCostUsd.toFixed(estCostUsd < 1 ? 4 : 2)}`;
+    const restoreStr = avgRestore > 0 ? ` Average thaw time is ${Math.round(avgRestore)} ms.` : "";
+    note.innerHTML = `Orb froze the container for <strong>${sleepPct.toFixed(1)}%</strong> of the session — we were only billed for the <strong>${fmtHm(workingHours)}</strong> the agent was actually computing. Total compute cost so far: <strong>${costStr}</strong> (30-day window, $0.005/GB-hr runtime + $0.05/GB-month disk).${restoreStr}`;
   } else {
-    note.innerHTML = `Orb freezes the container between runs (and sometimes within a run, while waiting on the LLM) — that's what the ${cycles || "many"} checkpoint cycles above reflect. The bar shows when our Python process thought it was <em>in</em> a run; the actual billed compute is typically less because Orb can also freeze during LLM waits.`;
+    note.style.display = "";
+    note.innerHTML = `Per-computer stats temporarily unavailable — numbers shown are derived from the agent's own log.`;
   }
 }
 

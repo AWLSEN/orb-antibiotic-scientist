@@ -13,10 +13,16 @@ Response shape:
     "usage": { runtime_gb_hours, disk_gb_hours, checkpoint_cycles, ... },
     "computers": [
       { id, name, status, runtime_mb, disk_mb, agent_state, agent_pid,
-        findings_candidates, session_started_at, last_event_at }
+        findings_candidates, session_started_at, last_event_at,
+        stats: { wall_secs, active_secs, sleep_pct, llm_calls,
+                 checkpoints, est_cost_usd, avg_restore_ms, ... } }
     ],
     "detail": null | { /* full detail for ?computer=<id> */ }
   }
+
+  The `stats` field comes from Orb's per-computer `/v1/computers/{id}/stats`
+  endpoint (window=30d) and is the source of truth for billing/activity —
+  numbers reconcile with admin.orbcloud.dev.
 
 Route: GET /api/state               → overview (usage + computers summary)
        GET /api/state?computer=ID   → overview + full detail for that id
@@ -207,6 +213,22 @@ def _computer_agent_state(cid: str) -> dict:
         return {"state": None, "pid": None, "port": None}
 
 
+def _computer_stats(cid: str, window: str = "30d") -> dict | None:
+    """Per-computer accurate stats — same math as admin.orbcloud.dev.
+
+    Returns None on failure so the caller can fall back gracefully.
+    Fields returned by the Orb endpoint include:
+      wall_secs, active_secs, sleep_secs, sleep_pct, active_pct,
+      llm_calls, checkpoints, ckpt_full, ckpt_incremental, failures,
+      runtime_gb_hours, disk_gb_hours, est_cost_usd,
+      last_active_ago_secs, avg_restore_ms
+    """
+    try:
+        return _orb_get(f"/v1/computers/{cid}/stats?window={window}")
+    except Exception:
+        return None
+
+
 def _candidate_count(cid: str) -> int:
     items = _file_dir(cid, "agent/code/findings/candidates")
     return sum(
@@ -220,6 +242,8 @@ def _summary_for_computer(c: dict) -> dict:
     agent = _computer_agent_state(cid)
     log_text = _file_text(cid, "agent/code/logs/agent-sdk.log")
     events = _parse_log_events(log_text)
+    stats_30d = _computer_stats(cid, window="30d")
+    stats_lifetime = _computer_stats(cid, window="lifetime")
     return {
         "id": cid,
         "name": c.get("name"),
@@ -233,6 +257,8 @@ def _summary_for_computer(c: dict) -> dict:
         "session_started_at": _session_started_at(events),
         "last_event_at": _last_event_ts(log_text),
         "events_count": len(events),
+        "stats": stats_30d,
+        "stats_lifetime": stats_lifetime,
     }
 
 
@@ -401,15 +427,18 @@ def _detail_for_computer(cid: str) -> dict:
 
 
 def _usage() -> dict:
+    """Org-wide 30-day usage roll-up.
+
+    Kept for backwards compatibility; the per-computer `stats` field is the
+    source of truth for the dashboard. Rates match Orb's public pricing:
+    $0.005/GB-hr runtime, $0.05/GB-month disk (≈ $0.0000694/GB-hr).
+    """
     try:
         u = _orb_get("/v1/usage")
-        # Rough $ estimate based on typical cloud-compute GB-hour rates.
-        # Orb pricing is not public at this level of granularity, so label
-        # clearly as an estimate. $0.03/GB-hr runtime, $0.001/GB-hr disk.
-        rt_usd = float(u.get("runtime_gb_hours", 0)) * 0.03
-        disk_usd = float(u.get("disk_gb_hours", 0)) * 0.001
+        rt_usd = float(u.get("runtime_gb_hours", 0)) * 0.005
+        disk_usd = float(u.get("disk_gb_hours", 0)) * (0.05 / 730.0)
         u["estimated_cost_usd"] = round(rt_usd + disk_usd, 4)
-        u["estimate_note"] = "rough estimate at $0.03/GB-hr runtime + $0.001/GB-hr disk"
+        u["estimate_note"] = "rate: $0.005/GB-hr runtime + $0.05/GB-month disk"
         return u
     except Exception as exc:
         return {"error": str(exc)}
