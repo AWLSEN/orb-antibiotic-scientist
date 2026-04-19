@@ -1191,9 +1191,18 @@ function renderHowItWorks(state, detail) {
   $("hiw-ax-start").textContent = startTxt;
   $("hiw-ax-mid").textContent = "";
 
+  // Is the agent stalled? We call it stalled when the container has been
+  // checkpointed AND no log event has fired in the last 30 min — that's
+  // "not napping, actually stuck" (LLM-provider quota, crash loop, etc.).
+  const lastEventIso = comp.last_event_at;
+  const lastEventMs2 = lastEventIso ? new Date(lastEventIso).getTime() : null;
+  const stalledMinutes = lastEventMs2 ? (nowMs - lastEventMs2) / 60000 : 0;
+  const stalled = !agentLive && lastEventMs2 && stalledMinutes > 30;
+
   // state chip (right side)
   const dot = $("hiw-dot"), lbl = $("hiw-state-label");
-  if (agentLive) { dot.classList.remove("idle"); lbl.textContent = "IN A RUN"; }
+  if (stalled) { dot.classList.add("idle"); lbl.textContent = "PAUSED"; }
+  else if (agentLive) { dot.classList.remove("idle"); lbl.textContent = "IN A RUN"; }
   else if (agentState === "dumping" || agentState === "checkpointing") { dot.classList.remove("idle"); lbl.textContent = "CHECKPOINTING"; }
   else if (isNowSleeping) { dot.classList.add("idle"); lbl.textContent = "BETWEEN RUNS"; }
   else { dot.classList.add("idle"); lbl.textContent = (agentState || "—").toUpperCase(); }
@@ -1235,7 +1244,13 @@ function renderHowItWorks(state, detail) {
     : "—";
 
   const note = $("hiw-note");
-  if (stats.wall_secs != null) {
+  const stalledHoursTxt = stalledMinutes > 60
+    ? `${Math.round(stalledMinutes/60)} hour${stalledMinutes >= 120 ? 's' : ''}`
+    : `${Math.round(stalledMinutes)} minutes`;
+  if (stalled) {
+    note.style.display = "";
+    note.innerHTML = `<strong>Agent is paused.</strong> The LLM provider (Z.AI GLM Coding Plan) returned a quota-exhausted error, so no new experiments are running right now. Last log event was ${stalledHoursTxt} ago. Orb has frozen the container — we're only paying for the disk (${estCostUsd > 0 ? '$'+estCostUsd.toFixed(4) : 'pennies'}) while we wait. This is the "bill for working, not waiting" story in action.`;
+  } else if (stats.wall_secs != null) {
     note.style.display = "";
     const costStr = `$${estCostUsd.toFixed(estCostUsd < 1 ? 4 : 2)}`;
     const restoreStr = avgRestore > 0 ? ` Average thaw time is ${Math.round(avgRestore)} ms.` : "";
