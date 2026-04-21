@@ -7,7 +7,7 @@ lang  = "python"
 entry = "src/agent.py"
 
 [source]
-git    = "https://github.com/nextbysam/orb-antibiotic-scientist"
+git    = "https://github.com/AWLSEN/orb-antibiotic-scientist"
 branch = "main"
 
 [build]
