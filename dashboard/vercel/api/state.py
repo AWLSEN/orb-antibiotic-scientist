@@ -192,6 +192,7 @@ def _last_event_ts(log_text: str) -> str | None:
     return None
 
 
+# bump 2026-04-21b — force Vercel Python redeploy after name-prefix filter fix
 _COMPUTER_NAME_PREFIX = "orb-antibiotic-scientist"
 
 
