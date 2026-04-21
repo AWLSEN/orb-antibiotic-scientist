@@ -12,8 +12,12 @@ LOG_DIR="$PROJECT_DIR/logs"
 PID_DIR="$LOG_DIR/pids"
 LOCK_FILE="$LOG_DIR/watchdog.lock"
 
-# Stall detection: kill if no new files in this many seconds (5 hours)
-STALL_TIMEOUT=18000
+# Stall detection: kill if no new files in this many seconds.
+# Default 30 min — a healthy run writes candidate/docking files every few
+# minutes; anything longer almost certainly means the SDK stream wedged
+# (e.g. Z.AI timeout mid-stream) and agent.py's per-message timeout
+# already tried to recover. Override via STALL_TIMEOUT env.
+STALL_TIMEOUT="${STALL_TIMEOUT:-1800}"
 
 mkdir -p "$PID_DIR" "$LOG_DIR"
 

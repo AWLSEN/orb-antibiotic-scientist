@@ -200,11 +200,24 @@ async def run_agent():
                 env=_llm_env,
             )
 
+        # Per-message timeout guards against a wedged LLM stream (SDK
+        # retries auth/transport internally and never raises, so without
+        # this the async-for can sit forever waiting for a chunk that
+        # never arrives). Env override: STREAM_IDLE_TIMEOUT_S.
+        stream_idle_timeout = float(os.environ.get("STREAM_IDLE_TIMEOUT_S", "900"))
+
         try:
             log_file = LOG_DIR / f"agent_run_{run_num}.log"
             msg_count = 0
             with open(log_file, "a") as lf:
-                async for message in query(prompt=prompt, options=options):
+                agen = query(prompt=prompt, options=options).__aiter__()
+                while True:
+                    try:
+                        message = await asyncio.wait_for(
+                            agen.__anext__(), timeout=stream_idle_timeout
+                        )
+                    except StopAsyncIteration:
+                        break
                     msg_count += 1
                     lf.write(f"[msg#{msg_count}] {type(message).__name__}: {repr(message)[:500]}\n")
                     lf.flush()
@@ -242,6 +255,13 @@ async def run_agent():
         except KeyboardInterrupt:
             log("Interrupted by user. Stopping.")
             break
+        except asyncio.TimeoutError:
+            log(
+                f"Run #{run_num} stalled: no SDK message in "
+                f"{stream_idle_timeout:.0f}s. Dropping session and restarting."
+            )
+            session_id = None
+            clear_session()
         except Exception as e:
             log(f"Run #{run_num} error: {e}")
             log(traceback.format_exc())
