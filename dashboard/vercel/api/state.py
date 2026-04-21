@@ -192,10 +192,25 @@ def _last_event_ts(log_text: str) -> str | None:
     return None
 
 
+_COMPUTER_NAME_PREFIX = "orb-antibiotic-scientist"
+
+
 def _list_computers() -> list[dict]:
+    """Return only computers that belong to this dashboard.
+
+    The dashboard's ORB_API_KEY may be scoped to an org with other,
+    unrelated computers (e.g. an exoplanet-hunter agent in the same
+    account). The page JS picks `computers[0]` for the detail fetch,
+    so any extra computer in the list silently hijacks the render.
+    Filter by name prefix to keep the dashboard pinned to this agent.
+    """
     try:
         data = _orb_get("/v1/computers")
-        return data.get("computers", []) if isinstance(data, dict) else []
+        all_computers = data.get("computers", []) if isinstance(data, dict) else []
+        return [
+            c for c in all_computers
+            if (c.get("name") or "").startswith(_COMPUTER_NAME_PREFIX)
+        ]
     except Exception:
         return []
 
